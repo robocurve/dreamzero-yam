@@ -390,7 +390,11 @@ def _install_training_patches() -> None:
     from groot.vla.experiment.utils import mprint
     from hydra.utils import instantiate
 
-    from src.reconstruct import TRAINED_PARAMETER_NAMES, load_agibot_shards
+    from src.reconstruct import (
+        TRAINED_PARAMETER_NAMES,
+        agibot_allowed_missing,
+        load_agibot_shards,
+    )
 
     def create_model_with_integrity(self: Any, cfg: Any, training_args: Any) -> Any:
         model = instantiate(cfg.model)
@@ -398,7 +402,11 @@ def _install_training_patches() -> None:
             mprint(
                 f"Strictly loading pretrained weights from: {cfg.pretrained_model_path}"
             )
-            load_agibot_shards(model, cfg.pretrained_model_path)
+            load_agibot_shards(
+                model,
+                cfg.pretrained_model_path,
+                allowed_missing=agibot_allowed_missing(cfg.pretrained_model_path),
+            )
             if (
                 hasattr(model, "action_head")
                 and hasattr(model.action_head, "inject_lora_after_loading")

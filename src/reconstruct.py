@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import types
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
@@ -29,6 +30,8 @@ PARITY_REFERENCE_TENSORS = "parity_reference.safetensors"
 PARITY_REFERENCE_NAMES = "parity_reference_names.json"
 FIXED_SAMPLE_INPUT = "fixed_sample_input.pt"
 FIXED_SAMPLE_OUTPUT = "fixed_sample_output.safetensors"
+AGIBOT_COMPONENT_PREFIXES = "agibot_component_prefixes.json"
+OPTIONAL_COMPONENT_PREFIXES = ("text_encoder", "image_encoder", "vae")
 
 
 @dataclass(frozen=True)
@@ -64,6 +67,53 @@ def _checkpoint_files(checkpoint_dir: Path) -> list[Path]:
     raise FileNotFoundError(
         f"no model.safetensors or model.safetensors.index.json in {checkpoint_dir}"
     )
+
+
+def record_agibot_component_prefixes(checkpoint_dir: str | Path) -> Path:
+    """Persist which optional Wan component prefixes the AgiBot index supplies."""
+    checkpoint_dir = Path(checkpoint_dir)
+    index_path = checkpoint_dir / "model.safetensors.index.json"
+    if not index_path.is_file():
+        raise FileNotFoundError(f"AgiBot safetensors index is absent: {index_path}")
+    index = json.loads(index_path.read_text())
+    keys = index["weight_map"]
+    present = sorted(
+        prefix
+        for prefix in OPTIONAL_COMPONENT_PREFIXES
+        if any(re.search(rf"(?:^|\.){re.escape(prefix)}\.", key) for key in keys)
+    )
+    destination = checkpoint_dir / AGIBOT_COMPONENT_PREFIXES
+    destination.write_text(
+        json.dumps(
+            {
+                "source": index_path.name,
+                "present_prefixes": present,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    return destination
+
+
+def agibot_allowed_missing(checkpoint_dir: str | Path) -> Callable[[str], bool]:
+    """Allow missing Wan components only when the AgiBot index omits them."""
+    metadata_path = Path(checkpoint_dir) / AGIBOT_COMPONENT_PREFIXES
+    if not metadata_path.is_file():
+        raise FileNotFoundError(
+            f"AgiBot component metadata is absent: {metadata_path}; rerun "
+            "download_checkpoints"
+        )
+    payload = json.loads(metadata_path.read_text())
+    present = set(payload["present_prefixes"])
+    unknown = present - set(OPTIONAL_COMPONENT_PREFIXES)
+    if unknown:
+        raise ValueError(f"unknown AgiBot component prefixes: {sorted(unknown)}")
+    absent = set(OPTIONAL_COMPONENT_PREFIXES) - present
+    if not absent:
+        return lambda _name: False
+    pattern = re.compile(rf"(?:^|\.)(?:{'|'.join(sorted(map(re.escape, absent)))})\.")
+    return lambda name: pattern.search(name) is not None
 
 
 def load_checkpoint_state_dict(checkpoint_dir: str | Path) -> dict[str, Any]:
@@ -244,7 +294,11 @@ def reconstruct_model(
         raise FileNotFoundError(f"checkpoint config is absent: {config_path}")
     config = VLAConfig(**training_identical_config(json.loads(config_path.read_text())))
     model = VLA(config)
-    base_integrity = load_agibot_shards(model, agibot_dir)
+    base_integrity = load_agibot_shards(
+        model,
+        agibot_dir,
+        allowed_missing=agibot_allowed_missing(agibot_dir),
+    )
     if not hasattr(model.action_head, "inject_lora_after_loading"):
         raise AttributeError("DreamZero action head has no inject_lora_after_loading()")
     model.action_head.inject_lora_after_loading()
@@ -392,12 +446,14 @@ def assert_eval_reconstruction_parity(model: Any, checkpoint_dir: str | Path) ->
 
 
 __all__ = [
+    "AGIBOT_COMPONENT_PREFIXES",
     "AGIBOT_CKPT_DIR",
     "WAN_CKPT_DIR",
     "UMT5_CKPT_DIR",
     "AGIBOT_REPO_ID",
     "WAN_REPO_ID",
     "UMT5_REPO_ID",
+    "agibot_allowed_missing",
     "assert_eval_reconstruction_parity",
     "assert_policy_output_bit_identity",
     "assert_tensor_bit_identity",
@@ -406,5 +462,6 @@ __all__ = [
     "load_agibot_shards",
     "load_overlay_with_integrity",
     "reconstruct_model",
+    "record_agibot_component_prefixes",
     "training_identical_config",
 ]

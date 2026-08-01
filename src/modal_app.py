@@ -25,6 +25,7 @@ from src.reconstruct import (
     UMT5_REPO_ID,
     WAN_CKPT_DIR,
     WAN_REPO_ID,
+    record_agibot_component_prefixes,
 )
 
 DREAMZERO_REF = "ab790c198fbce33503358efbbd4187ce9a89adf3"
@@ -567,6 +568,9 @@ def download_checkpoints() -> None:
     ):
         destination.mkdir(parents=True, exist_ok=True)
         snapshot_download(repo_id=repo_id, local_dir=destination)
+        if repo_id == AGIBOT_REPO_ID:
+            metadata_path = record_agibot_component_prefixes(destination)
+            print(f"recorded AgiBot component prefixes in {metadata_path}", flush=True)
         print(f"downloaded {repo_id} -> {destination}", flush=True)
         checkpoint_volume.commit()
 
