@@ -20,23 +20,43 @@ from typing import Any
 from transformers import TrainerCallback
 
 
+def _scalar_token(value: Any) -> str | None:
+    if value is None:
+        return "none:None"
+    if isinstance(value, bool):
+        return f"bool:{value!r}"
+    if isinstance(value, int):
+        return f"int:{value!r}"
+    if isinstance(value, float):
+        return f"float:{value!r}"
+    if isinstance(value, str):
+        return f"str:{value!r}"
+    return None
+
+
 def _hash_value(value: Any, digest: Any, prefix: str = "root") -> None:
     import torch
 
-    digest.update(prefix.encode())
     if isinstance(value, torch.Tensor):
         tensor = value.detach().cpu().contiguous()
+        digest.update(prefix.encode())
         digest.update(str(tensor.dtype).encode())
         digest.update(str(tuple(tensor.shape)).encode())
-        digest.update(tensor.view(torch.uint8).numpy().tobytes())
+        digest.update(tensor.reshape(-1).view(torch.uint8).numpy().tobytes())
     elif isinstance(value, Mapping):
-        for key in sorted(value, key=lambda item: repr(item)):
-            _hash_value(value[key], digest, f"{prefix}.{key!r}")
+        keyed_values = [
+            (token, item)
+            for item in value
+            if (token := _scalar_token(item)) is not None
+        ]
+        for token, key in sorted(keyed_values):
+            _hash_value(value[key], digest, f"{prefix}.{token}")
     elif isinstance(value, (tuple, list)):
         for index, item in enumerate(value):
             _hash_value(item, digest, f"{prefix}.{index}")
-    else:
-        digest.update(repr(value).encode())
+    elif (token := _scalar_token(value)) is not None:
+        digest.update(prefix.encode())
+        digest.update(token.encode())
 
 
 def canonical_hash(value: Any) -> str:
