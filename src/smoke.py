@@ -157,6 +157,20 @@ def _start_training(
     return process, log_file
 
 
+def _dump_log_tail(log_path: Path, lines: int = 150) -> None:
+    """Echo the child log to container stdout — volume commits can be lost on
+    crash-shutdown, but streamed stdout always reaches Modal app logs."""
+    try:
+        content = log_path.read_text(errors="replace").splitlines()[-lines:]
+    except OSError as error:
+        print(f"[child log unreadable: {error}]", flush=True)
+        return
+    print(f"===== child log tail ({log_path}) =====", flush=True)
+    for line in content:
+        print(line, flush=True)
+    print("===== end child log tail =====", flush=True)
+
+
 def _stop_process_group(
     process: subprocess.Popen, timeout: float = 180.0, hard: bool = False
 ) -> None:
@@ -188,6 +202,7 @@ def kill_and_resume_drill(
     try:
         while time.monotonic() < deadline:
             if process.poll() is not None:
+                _dump_log_tail(log_path)
                 raise RuntimeError(
                     f"initial smoke process exited {process.returncode} before checkpoint "
                     f"{FIRST_CHECKPOINT_STEP}; see {log_path}"
@@ -198,6 +213,7 @@ def kill_and_resume_drill(
             except (AssertionError, FileNotFoundError, json.JSONDecodeError):
                 time.sleep(10)
         else:
+            _dump_log_tail(log_path)
             raise TimeoutError(f"timed out waiting for complete checkpoint: {first}")
     finally:
         # Hard kill (SIGKILL, no graceful flush) models a real preemption; the
@@ -220,9 +236,12 @@ def kill_and_resume_drill(
         return_code = resumed.wait(timeout=checkpoint_timeout)
     except subprocess.TimeoutExpired:
         _stop_process_group(resumed)
+        _dump_log_tail(log_path)
         raise TimeoutError("resumed smoke process did not finish")
     finally:
         resumed_log.close()
+    if return_code != 0:
+        _dump_log_tail(log_path)
     if return_code != 0:
         raise subprocess.CalledProcessError(return_code, command)
 
