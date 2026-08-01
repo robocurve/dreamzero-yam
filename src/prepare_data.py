@@ -287,12 +287,28 @@ def _loader_dry_run(output_repo: Path, samples: int, seed: int) -> None:
         relative_action_keys=list(KEY_RANGES),
     )
 
-    candidates = []
-    for trajectory_id, length in zip(
-        dataset.trajectory_ids, dataset.trajectory_lengths, strict=True
-    ):
-        if int(length) >= ACTION_HORIZON * MAX_CHUNK_SIZE + 2:
-            candidates.append((int(trajectory_id), int(length) // 2))
+    # The sharded dataset only serves trajectories from a cached shard —
+    # get_step_data without start/finish_cache_shard hits the "Cached
+    # dataframe is None" assert. Walk shards until enough long-enough
+    # trajectories are available.
+    length_by_id = {
+        int(tid): int(length)
+        for tid, length in zip(
+            dataset.trajectory_ids, dataset.trajectory_lengths, strict=True
+        )
+    }
+    minimum_length = ACTION_HORIZON * MAX_CHUNK_SIZE + 2
+    candidates: list[tuple[int, int]] = []
+    for shard_index in range(dataset.num_shards):
+        dataset.start_cache_shard(shard_index)
+        dataset.finish_cache_shard()
+        candidates = [
+            (tid, length_by_id[tid] // 2)
+            for tid in dataset.get_trajectories_in_shard()
+            if length_by_id[tid] >= minimum_length
+        ]
+        if candidates:
+            break
     if not candidates:
         raise AssertionError(
             f"no episode long enough for a {MAX_CHUNK_SIZE}-chunk sample: {output_repo}"
