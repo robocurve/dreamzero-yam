@@ -47,6 +47,7 @@ def generate_indices(
     if not eligible:
         raise ValueError(f"no frames have {MIN_REMAINING_FRAMES} remaining steps")
     rng = np.random.RandomState(SEED)
+    # Sampling with replacement is deliberate and mirrors the π0.5 protocol.
     chosen = [
         eligible[int(index)] for index in rng.randint(0, len(eligible), N_SAMPLES)
     ]
