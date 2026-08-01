@@ -19,6 +19,9 @@ from typing import Any
 
 from transformers import TrainerCallback
 
+RISING_TAIL_FRACTION = 0.2
+RISING_TAIL_MIN_POINTS = 5
+
 
 def _scalar_token(value: Any) -> str | None:
     if value is None:
@@ -63,6 +66,22 @@ def canonical_hash(value: Any) -> str:
     digest = hashlib.sha256()
     _hash_value(value, digest)
     return digest.hexdigest()
+
+
+def normalized_rising_tail(losses: list[float]) -> float:
+    """Return the fitted fractional loss change over the trailing arm window."""
+    if len(losses) < RISING_TAIL_MIN_POINTS:
+        return math.nan
+    count = max(RISING_TAIL_MIN_POINTS, math.ceil(len(losses) * RISING_TAIL_FRACTION))
+    tail = losses[-count:]
+    x_center = (count - 1) / 2
+    y_center = statistics.fmean(tail)
+    denominator = sum((index - x_center) ** 2 for index in range(count))
+    slope = sum(
+        (index - x_center) * (loss - y_center) for index, loss in enumerate(tail)
+    ) / max(denominator, 1.0)
+    scale = statistics.median(abs(loss) for loss in tail)
+    return slope * (count - 1) / scale if scale else math.nan
 
 
 def _unwrap(trainer: Any) -> Any:
@@ -313,6 +332,7 @@ class StageMetricsCallback(TrainerCallback):
         grad_median = (
             statistics.median(finite_gradients) if finite_gradients else grad_norm
         )
+        finite_losses = [*self.losses, loss] if math.isfinite(loss) else self.losses
         now = time.monotonic()
         step = int(state.global_step)
         global_batch = int(os.environ.get("DREAMZERO_GLOBAL_BATCH", "1"))
@@ -353,6 +373,7 @@ class StageMetricsCallback(TrainerCallback):
                 if grad_median and math.isfinite(grad_norm)
                 else math.nan
             ),
+            "instability/rising_tail": normalized_rising_tail(finite_losses),
             "perf/samples_per_second": samples_per_second,
             "perf/dataloader_wait_seconds_per_step": dataloader_wait_seconds_per_step,
             "perf/dataloader_wait_fraction": dataloader_wait_fraction,

@@ -27,7 +27,7 @@ The stable paths baked into checkpoint `config.json` are:
 - The benchmark defaults to H100:8, H100:4, B200:8, and H200:8, and crosses those with dataloader-worker and container-CPU sweeps. It must read a fixed 10-repo train subset from container NVMe, reuse that copy for the worker sweep, and keep global batch 32.
 - Arm files live in `configs/arms/`: A is lr 1e-5, r/α 4/4; B is lr 5e-6, r/α 4/4; C is lr 1e-5, r/α 32/32. Every arm and main train default uses warmup ratio 0.01. Arms get equal wall-clock limits.
 - All runs use the single WandB project `dreamzero-yam`. Required names carry `smoke`, `tune-armA/B/C`, `train`, `benchmark`, or `val-monitor`. Trainer loss must appear as `train/loss`.
-- Tune screening metrics are `instability/nan_flag`, `instability/loss_spike_ratio`, and `instability/grad_norm_ratio`.
+- Tune screening metrics are `instability/nan_flag`, `instability/loss_spike_ratio`, `instability/rising_tail`, and `instability/grad_norm_ratio`.
 - `src/val_monitor.py` is a 1-GPU heartbeat sidecar over complete milestone copies. It logs deterministic `val/loss` and teacher-forced raw-absolute `val/open_loop_mse` at the checkpoint global step. It must reconstruct only through `src/reconstruct.py` and invert normalization with the checkpoint's merged metadata.
 - `src/gpu_metrics.py` samples every GPU stage at about 10 seconds. Keep its DCGM → NVML GPM → NVML-util fallback and `dcgm/source_tier` tag. Benchmark tables include throughput, cost per 1,000 samples, analytic model TFLOPs/s/GPU, and MFU.
 - `nvtop` is installed in the training image. For inspection: `modal container list`, then `modal container exec <container-id> -- nvtop`.

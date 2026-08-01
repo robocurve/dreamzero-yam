@@ -95,7 +95,7 @@ Use `modal app logs dreamzero-yam` for container, preemption, NVMe-copy, resume,
 - `train/loss`: Hugging Face Trainer's flow-matching training objective.
 - `val/loss`: the same objective on fixed held-out samples with fixed noise/timestep draws.
 - `val/open_loop_mse`: teacher-forced raw-absolute 14-D MSE over predicted steps 0–15.
-- `instability/*`: NaN flag, loss/rolling-median spike ratio, and grad-norm/rolling-median ratio.
+- `instability/*`: NaN flag, loss/rolling-median spike ratio, normalized loss trend over the trailing 20% arm window (`rising_tail`), and grad-norm/rolling-median ratio.
 - `gpu/*`, `dcgm/source_tier`, and `perf/*`: per-GPU utilization, profiling tier, throughput, analytic model TFLOPs/s/GPU, MFU, cost per 1,000 samples, and dataloader wait (`perf/dataloader_wait_seconds_per_step`, `perf/dataloader_wait_fraction`).
 
 The benchmark prints and logs a WandB table containing samples/s, dollars per 1,000 samples, TFLOPs/s/GPU, and MFU for every GPU/worker/CPU configuration. GPU telemetry tries DCGM profiling, then NVML GPM, then ordinary NVML utilization/VRAM at roughly 10-second cadence.
