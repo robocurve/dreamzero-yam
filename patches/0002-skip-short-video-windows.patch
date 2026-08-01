@@ -1,8 +1,8 @@
 diff --git a/groot/vla/data/dataset/lerobot_sharded.py b/groot/vla/data/dataset/lerobot_sharded.py
-index 409fa37..3b0ad0d 100755
+index 409fa37..3564ef3 100755
 --- a/groot/vla/data/dataset/lerobot_sharded.py
 +++ b/groot/vla/data/dataset/lerobot_sharded.py
-@@ -1220,11 +1220,10 @@ class ShardedLeRobotSubLangSingleActionChunkDatasetDROID(LeRobotSingleDataset):
+@@ -1220,11 +1220,11 @@ class ShardedLeRobotSubLangSingleActionChunkDatasetDROID(LeRobotSingleDataset):
              if additional_idx < trajectory_length and unique_sorted.size < max_frames:
                  unique_sorted = np.append(unique_sorted, additional_idx)
              else:
@@ -13,8 +13,9 @@ index 409fa37..3b0ad0d 100755
 -                unique_sorted = unique_sorted[:-7]
 +                # Batch >1 requires uniform shapes across the batch: skip
 +                # short windows entirely instead of trimming to fewer chunks
-+                # (mixed chunk counts crash the collate np.stack).
-+                return np.array([])
++                # (mixed chunk counts crash the collate np.stack). dtype must
++                # be integer: the empty array is used as an index downstream.
++                return np.array([], dtype=np.int64)
          
          # ensure that unique_sorted has 4n+1 frames
          assert unique_sorted.size % 8 == 1, f"unique_sorted size {unique_sorted.size} is not 4n+1"
