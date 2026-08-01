@@ -176,11 +176,23 @@ def _save_parity_reference(model: Any, checkpoint_dir: Path) -> None:
     from src.reconstruct import PARITY_REFERENCE_NAMES, PARITY_REFERENCE_TENSORS
 
     state = model.state_dict()
+    lora_name = next(
+        (name for name in state if "lora_A" in name or "lora_B" in name), None
+    )
+    # peft 0.5.0 (upstream pin) predates the `base_layer` submodule: the
+    # wrapped Linear keeps its weight at `<module>.weight` with lora_A/lora_B
+    # siblings, so derive the LoRA-target base weight from the lora key.
+    base_name = None
+    if lora_name is not None:
+        candidate = lora_name.split(".lora_A")[0].split(".lora_B")[0] + ".weight"
+        base_name = (
+            candidate
+            if candidate in state
+            else next((name for name in state if ".base_layer." in name), None)
+        )
     categories = {
-        "base_layer": next((name for name in state if ".base_layer." in name), None),
-        "lora": next(
-            (name for name in state if "lora_A" in name or "lora_B" in name), None
-        ),
+        "base_layer": base_name,
+        "lora": lora_name,
         "action_head": next(
             (
                 name
