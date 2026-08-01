@@ -803,7 +803,7 @@ def _arm_config(arm: str) -> dict[str, str | float | int]:
     path = (
         Path(__file__).resolve().parents[1]
         / "configs/arms"
-        / f"arm{normalized.upper()}.yaml"
+        / f"arm{normalized.upper()}.json"
     )
     return json.loads(path.read_text())
 

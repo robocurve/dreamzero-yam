@@ -75,7 +75,7 @@ modal run --detach src/modal_app.py::train --gpu-spec H100:4 \
 modal run --detach src/val_monitor.py::val_monitor --exp-name tune-armA
 ```
 
-Arm A is r/α 4/4 at 1e-5, Arm B changes only LR to 5e-6, and Arm C changes only capacity to r/α 32/32. The checked-in `configs/arms/` files fix warmup ratio at 0.01 for all arms; main-train defaults match it for warm-start compatibility. Arm runs stop after the same `--trial-minutes` wall-clock budget.
+Arm A is r/α 4/4 at 1e-5, Arm B changes only LR to 5e-6, and Arm C changes only capacity to r/α 32/32. The checked-in `configs/arms/*.json` files fix warmup ratio at 0.01 for all arms; main-train defaults match it for warm-start compatibility. Arm runs stop after the same `--trial-minutes` wall-clock budget.
 
 Generate the held-out indices later on a CPU container after the data exists, review them, and commit the produced JSON before evaluation:
 
