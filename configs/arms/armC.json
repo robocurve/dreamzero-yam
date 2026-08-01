@@ -1,0 +1,8 @@
+{
+  "name": "armC",
+  "stage": "tune-armC",
+  "learning_rate": 1e-5,
+  "lora_rank": 32,
+  "lora_alpha": 32,
+  "warmup_ratio": 0.01
+}
