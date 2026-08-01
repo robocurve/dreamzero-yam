@@ -322,11 +322,23 @@ def fixed_sample_policy_call(model: Any, sample: Mapping[str, Any]) -> Any:
 
     Upstream ``VLA.get_action`` validates pre-collation NumPy inputs, while the
     parity artifact is deliberately captured after collation as tensors. This
-    is its exact post-validation body and therefore exercises the same policy
-    output without weakening the public input validation.
+    reproduces its post-validation preparation, including VLA's device/dtype
+    tree cast, and exercises the same policy output without weakening the
+    public input validation.
     """
+    import torch
+    import tree
+
     backbone_inputs = model.backbone.prepare_input(sample)
     action_inputs = model.action_head.prepare_input(sample)
+
+    def to_device_with_maybe_dtype(value: Any) -> Any:
+        if torch.is_floating_point(value):
+            return value.to(model.device, dtype=model.action_head.dtype)
+        return value.to(model.device)
+
+    backbone_inputs = tree.map_structure(to_device_with_maybe_dtype, backbone_inputs)
+    action_inputs = tree.map_structure(to_device_with_maybe_dtype, action_inputs)
     backbone_outputs = model.backbone(backbone_inputs)
     return model.action_head.get_action(backbone_outputs, action_inputs)
 

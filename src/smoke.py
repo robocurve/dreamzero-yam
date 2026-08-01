@@ -330,11 +330,15 @@ def assert_merged_metadata_ranges(checkpoint: Path, eps: float = 1e-8) -> None:
 
 
 def assert_eval_reconstruction(final_checkpoint: Path, device: str = "cuda:0") -> None:
+    import torch
+
     from src.reconstruct import assert_eval_reconstruction_parity, reconstruct_model
 
     model, base_integrity, overlay_integrity = reconstruct_model(
         final_checkpoint, device=device
     )
+    model.to(dtype=torch.bfloat16)
+    model.post_initialize()
     assert not base_integrity.missing_keys and not base_integrity.unexpected_keys
     assert not overlay_integrity.unexpected_keys
     assert (
