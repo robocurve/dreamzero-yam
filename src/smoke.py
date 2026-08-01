@@ -72,12 +72,18 @@ def assert_complete_checkpoint(
     )
 
 
-def _training_command(dataset: Path, output: Path, num_gpus: int) -> list[str]:
+def _training_command(
+    dataset: Path, output: Path, num_gpus: int, rdzv_port: int = 29400
+) -> list[str]:
     from src.reconstruct import AGIBOT_CKPT_DIR, UMT5_CKPT_DIR, WAN_CKPT_DIR
 
     return [
         "torchrun",
-        "--standalone",
+        # A per-launch rendezvous port instead of --standalone's fixed 29400:
+        # the resume relaunch in the same container collided with the
+        # SIGKILLed run's lingering TCPStore sockets (sendBytes failures).
+        "--rdzv-backend=c10d",
+        f"--rdzv-endpoint=localhost:{rdzv_port}",
         f"--nproc_per_node={num_gpus}",
         str(PIPELINE_ROOT / "src/train_entry.py"),
         "report_to=wandb",
@@ -194,7 +200,7 @@ def kill_and_resume_drill(
         shutil.rmtree(output)
     output.mkdir(parents=True)
     log_path = output / "smoke.log"
-    command = _training_command(dataset, output, num_gpus)
+    command = _training_command(dataset, output, num_gpus, rdzv_port=29411)
 
     process, log_file = _start_training(command, log_path, assert_resume=False)
     first = output / f"checkpoint-{FIRST_CHECKPOINT_STEP}"
@@ -231,7 +237,8 @@ def kill_and_resume_drill(
         except Exception:
             shutil.rmtree(checkpoint)
 
-    resumed, resumed_log = _start_training(command, log_path, assert_resume=True)
+    resume_command = _training_command(dataset, output, num_gpus, rdzv_port=29517)
+    resumed, resumed_log = _start_training(resume_command, log_path, assert_resume=True)
     try:
         return_code = resumed.wait(timeout=checkpoint_timeout)
     except subprocess.TimeoutExpired:
