@@ -63,7 +63,7 @@ prepare_image = (
         "python -m pip install numpy==1.26.4 pandas pyarrow pydantic PyYAML tqdm "
         "decord2 av==15.0.0 hydra-core dm_tree scipy albumentations==1.4.18 "
         "einops transformers==4.51.3 peft==0.5.0 datasets==3.6.0 "
-        "opencv-python-headless==4.8.0.74 h5py imageio matplotlib typing_extensions",
+        "opencv-python-headless==4.9.0.80 h5py imageio matplotlib typing_extensions",
         f"python -m pip install --no-deps -e {DREAMZERO_ROOT}",
     )
     .add_local_dir(str(LOCAL_ROOT), str(APP_ROOT), copy=True)
