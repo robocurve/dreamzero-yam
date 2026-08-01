@@ -231,6 +231,13 @@ def teacher_forced_open_loop_mse(
     ):
         for cpu_batch in batches:
             batch = _to_device(cpu_batch, device)
+            # The head is stateful (language cache, current_start_frame, KV
+            # caches) and latent_video=None alone does NOT reset it; upstream
+            # only resets on language change / single-frame video / frame
+            # overflow. Force the `language is None` reset branch so every
+            # sample is evaluated stateless.
+            model.action_head.language = None
+            model.action_head.current_start_frame = 0
             output = model.lazy_joint_video_action_causal(batch, latent_video=None)
             prediction = output["action_pred"]
             if "action" not in batch or "state" not in batch:
