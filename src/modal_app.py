@@ -21,6 +21,8 @@ from src.gpu_metrics import parse_gpu_spec, throughput_metrics
 from src.reconstruct import (
     AGIBOT_CKPT_DIR,
     AGIBOT_REPO_ID,
+    PARITY_REFERENCE_NAMES,
+    PARITY_REFERENCE_TENSORS,
     UMT5_CKPT_DIR,
     UMT5_REPO_ID,
     WAN_CKPT_DIR,
@@ -199,6 +201,8 @@ def _checkpoint_complete(checkpoint: Path, expected_world_size: int | None) -> b
             checkpoint / "experiment_cfg/conf.yaml",
             checkpoint / "experiment_cfg/metadata.json",
             checkpoint / "experiment_cfg/trained_parameter_names.json",
+            checkpoint / PARITY_REFERENCE_NAMES,
+            checkpoint / PARITY_REFERENCE_TENSORS,
         )
         if not all(path.is_file() for path in required):
             return False
@@ -226,6 +230,12 @@ def _checkpoint_complete(checkpoint: Path, expected_world_size: int | None) -> b
         elif (
             len(optimizer) < expected_world_size
             or len(model_state) < expected_world_size
+        ):
+            return False
+        probe_world_size = expected_world_size or len(optimizer)
+        if not all(
+            (checkpoint / f"resume_probe_rank_{rank}.json").is_file()
+            for rank in range(probe_world_size)
         ):
             return False
         if (checkpoint / "model.safetensors.index.json").is_file():
