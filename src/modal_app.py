@@ -55,16 +55,14 @@ INTERRUPTION_MTBF_SECONDS = 24 * 60 * 60.0
 # Plan Phase 3/4 research estimate (~0.3 samples/s/GPU on 8 GPUs); the
 # benchmark stage replaces this with a measured value.
 ESTIMATED_AGGREGATE_SAMPLES_PER_SECOND = 2.4
-DEFAULT_GPU_SPEC = "H100:8"
+DEFAULT_GPU_SPEC = "H200:8"
 WANDB_PROJECT = "dreamzero-yam"
 
 
 app = modal.App("dreamzero-yam")
 
 training_image = (
-    modal.Image.from_registry(
-        "nvidia/cuda:12.9.1-devel-ubuntu22.04", add_python="3.11"
-    )
+    modal.Image.from_registry("nvidia/cuda:12.9.1-devel-ubuntu22.04", add_python="3.11")
     .apt_install(
         "git",
         "git-lfs",
@@ -649,7 +647,7 @@ def download_checkpoints() -> None:
 
 @app.function(
     image=training_image,
-    gpu="H100:2",
+    gpu="H200:2",
     volumes={"/data": data_volume, "/checkpoints": checkpoint_volume},
     secrets=secrets,
     timeout=8 * 60 * 60,
@@ -675,7 +673,7 @@ def smoke_test() -> None:
             "--stage",
             "smoke",
             "--gpu-spec",
-            "H100:2",
+            "H200:2",
             "--runtime-metrics",
             str(output / "runtime_metrics.jsonl"),
         ],
@@ -710,7 +708,7 @@ def smoke_test() -> None:
 
 @app.function(
     image=training_image,
-    gpu="H100:1",
+    gpu="H200:1",
     volumes={"/data": data_volume, "/checkpoints": checkpoint_volume},
     secrets=secrets,
     timeout=24 * 60 * 60,
@@ -757,7 +755,7 @@ def _gpu_stage_worker(
 
 @app.function(
     image=training_image,
-    gpu="H100:1",
+    gpu="H200:1",
     volumes={"/data": data_volume, "/checkpoints": checkpoint_volume},
     secrets=secrets,
     timeout=24 * 60 * 60,
@@ -779,10 +777,11 @@ def _benchmark_worker(
             f"benchmark GPU count {num_gpus} must divide global batch "
             f"{GLOBAL_BATCH_SIZE}"
         )
-    # Memory-safe per-device batch by architecture (smoke measured 76.5 GiB in
-    # use at batch 4 on H100-80GB -> OOM; B200's 192 GB can take the official
-    # batch 4). The global batch stays 32 via gradient accumulation.
-    max_per_device = {"H100": 2, "H200": 2, "B200": 4}.get(architecture, 2)
+    # H100-80GB is excluded: smoke measured 77 GiB PyTorch-allocated at batch
+    # 2 (OOM), and batch 1 hits an untested upstream DiT path. H200 (141 GB)
+    # fits batch 2 comfortably; B200 (192 GB) takes the official batch 4.
+    # The global batch stays 32 via gradient accumulation.
+    max_per_device = {"H200": 2, "B200": 4}.get(architecture, 2)
     per_device_batch_size = min(GLOBAL_BATCH_SIZE // num_gpus, max_per_device)
     # A fixed first-10 sorted train subset keeps every matrix cell comparable
     # while limiting the one-time FUSE-to-NVMe copy in each GPU/CPU container.
@@ -942,7 +941,7 @@ def tune(
 
 @app.local_entrypoint()
 def benchmark(
-    gpu_specs: str = "H100:8,H100:4,B200:8,H200:8",
+    gpu_specs: str = "H200:8,H200:4,B200:8",
     dataloader_workers: str = "1,8",
     container_cpus: str = "16,32",
     steps: int = 100,

@@ -131,7 +131,12 @@ def build_fixed_val_batches(
         np.random.set_state(numpy_state)
         torch.random.set_rng_state(torch_state)
     collator = instantiate(cfg.data_collator)
-    return [collator([sample]) for sample in samples], transform
+    # Batch samples in PAIRS: upstream's training forward (reused for the
+    # deterministic val/loss) breaks at batch 1 (tuple modulation shapes).
+    if len(samples) % 2:
+        samples = samples[:-1]
+    pairs = [samples[i : i + 2] for i in range(0, len(samples), 2)]
+    return [collator(pair) for pair in pairs], transform
 
 
 def _to_device(value: Any, device: Any) -> Any:
@@ -315,7 +320,7 @@ def _upload_milestone_to_hf(checkpoint: Path, step: int) -> None:
 
 @app.function(
     image=training_image,
-    gpu="H100:1",
+    gpu="H200:1",
     volumes={"/data": data_volume, "/checkpoints": checkpoint_volume},
     # hf-robocurve-write exposes HF_WRITE_TOKEN, used only for milestone uploads;
     # HF_TOKEN (read) still comes from the shared huggingface-token secret.
@@ -362,7 +367,7 @@ def val_monitor(
             "--stage",
             "val-monitor",
             "--gpu-spec",
-            "H100:1",
+            "H200:1",
             "--runtime-metrics",
             str(runtime_path),
         ],
