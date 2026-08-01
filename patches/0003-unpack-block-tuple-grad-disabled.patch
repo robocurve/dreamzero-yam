@@ -1,0 +1,18 @@
+diff --git a/groot/vla/model/dreamzero/modules/wan_video_dit_action_casual_chunk.py b/groot/vla/model/dreamzero/modules/wan_video_dit_action_casual_chunk.py
+index c5e2528..1f45c2e 100644
+--- a/groot/vla/model/dreamzero/modules/wan_video_dit_action_casual_chunk.py
++++ b/groot/vla/model/dreamzero/modules/wan_video_dit_action_casual_chunk.py
+@@ -2140,7 +2140,12 @@ class CausalWanModel(ModelMixin, ConfigMixin):
+                     use_reentrant=False,
+                 )
+             else:
+-                x = block(x, **kwargs)
++                # Blocks return (x, kv_cache); only the checkpointed branch
++                # unpacked it, so any grad-disabled training forward (e.g.
++                # deterministic eval of the training objective) crashed with
++                # AttributeError: 'tuple' object has no attribute 'shape'.
++                x, _updated_kv_cache = block(x, **kwargs)
++                assert _updated_kv_cache is None
+ 
+         if clean_x is not None:
+             x = x[:, clean_x.shape[1]:]
