@@ -508,6 +508,31 @@ def _install_training_patches() -> None:
         trainer.add_callback(StageMetricsCallback(trainer))
         return trainer
 
+    def robust_get_last_checkpoint(folder: str) -> str | None:
+        """Checkpoint discovery that trusts file reads, not directory listings.
+
+        The Modal volume's FUSE dentry cache can list a directory another
+        process rmtree'd moments earlier; trainer resume then picks the ghost
+        and crashes reading its trainer_state.json. Require the exact file the
+        trainer will read next to actually open.
+        """
+        import re
+
+        candidates = []
+        for name in os.listdir(folder):
+            match = re.fullmatch(r"checkpoint-(\d+)", name)
+            if not match:
+                continue
+            state_path = os.path.join(folder, name, "trainer_state.json")
+            try:
+                with open(state_path, encoding="utf-8"):
+                    pass
+            except OSError:
+                continue
+            candidates.append((int(match.group(1)), os.path.join(folder, name)))
+        return max(candidates)[1] if candidates else None
+
+    base_module.get_last_checkpoint = robust_get_last_checkpoint
     base_module.BaseExperiment.create_model = create_model_with_integrity
     base_module.BaseExperiment.create_trainer = create_trainer_with_probes
     # VLAExperiment inherits both methods, so patching the base before Hydra's
