@@ -287,7 +287,14 @@ def _upload_milestone_to_hf(checkpoint: Path, step: int) -> None:
     """Mirror an evaluated milestone to HF under checkpoints/step-N/."""
     from huggingface_hub import HfApi
 
-    api = HfApi(token=os.environ.get("HF_TOKEN"))
+    # hf-robocurve-write exposes HF_WRITE_TOKEN (verified via Modal preflight);
+    # HF_TOKEN belongs to the read-only huggingface-token secret.
+    write_token = os.environ.get("HF_WRITE_TOKEN")
+    if not write_token:
+        raise RuntimeError(
+            "HF_WRITE_TOKEN missing: hf-robocurve-write secret not mounted or renamed"
+        )
+    api = HfApi(token=write_token)
     api.create_repo(HF_MILESTONE_REPO, repo_type="model", private=True, exist_ok=True)
     api.upload_folder(
         repo_id=HF_MILESTONE_REPO,
@@ -303,8 +310,8 @@ def _upload_milestone_to_hf(checkpoint: Path, step: int) -> None:
     image=training_image,
     gpu="H100:1",
     volumes={"/data": data_volume, "/checkpoints": checkpoint_volume},
-    # hf-robocurve-write is listed last so its HF_TOKEN overrides the shared
-    # read token from huggingface-token for the milestone mirror uploads.
+    # hf-robocurve-write exposes HF_WRITE_TOKEN, used only for milestone uploads;
+    # HF_TOKEN (read) still comes from the shared huggingface-token secret.
     secrets=[*secrets, modal.Secret.from_name("hf-robocurve-write")],
     timeout=24 * 60 * 60,
     retries=modal.Retries(max_retries=3, initial_delay=60.0),
