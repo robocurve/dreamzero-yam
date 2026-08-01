@@ -63,7 +63,7 @@ app = modal.App("dreamzero-yam")
 
 training_image = (
     modal.Image.from_registry(
-        "nvidia/cuda:12.9.1-cudnn-devel-ubuntu22.04", add_python="3.11"
+        "nvidia/cuda:12.9.1-devel-ubuntu22.04", add_python="3.11"
     )
     .apt_install(
         "git",
