@@ -190,20 +190,20 @@ def _decode_absolute_action(
     """Invert merged-stat normalization, then undo all-14D relative action."""
     import numpy as np
 
-    decoded_action = transform.unapply(
-        {"action": normalized_action.detach().float().cpu().clone()}
-    )
-    decoded_state = transform.unapply(
-        {"state": normalized_state.detach().float().cpu().clone()}
+    decoded = transform.unapply(
+        {
+            "action": normalized_action.detach().float().cpu().clone(),
+            "state": normalized_state.detach().float().cpu().clone(),
+        }
     )
     action_parts = []
     for key in ACTION_KEYS:
         action_key = f"action.{key}"
         state_key = f"state.{key}"
-        if action_key not in decoded_action or state_key not in decoded_state:
+        if action_key not in decoded or state_key not in decoded:
             raise KeyError(f"inverse transform omitted {action_key!r} or {state_key!r}")
-        relative = np.asarray(decoded_action[action_key], dtype=np.float64)
-        state = np.asarray(decoded_state[state_key], dtype=np.float64)
+        relative = np.asarray(decoded[action_key], dtype=np.float64)
+        state = np.asarray(decoded[state_key], dtype=np.float64)
         reference = state[..., -1, :]
         if relative.ndim > reference.ndim:
             reference = np.expand_dims(reference, axis=-2)
@@ -231,7 +231,7 @@ def teacher_forced_open_loop_mse(
     ):
         for cpu_batch in batches:
             batch = _to_device(cpu_batch, device)
-            output = model.gt_video_action_pred(batch)
+            output = model.lazy_joint_video_action_causal(batch, latent_video=None)
             prediction = output["action_pred"]
             if "action" not in batch or "state" not in batch:
                 raise KeyError("held-out collated batch lacks action/state tensors")
