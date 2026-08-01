@@ -95,6 +95,12 @@ training_image = (
         "tiktoken sentencepiece termcolor click tyro timm safetensors "
         "nvidia-ml-py pynvml h5py gymnasium",
         "MAX_JOBS=8 python -m pip install flash-attn --no-build-isolation",
+        # train_entry imports upstream's @hydra.main(config_path="../configs")
+        # as a module, so Hydra loads configs via the package source, which
+        # requires __init__.py in every config dir; upstream ships none
+        # (their scripts run experiment.py as __main__ → file-based source).
+        f"find {DREAMZERO_ROOT}/groot/vla/configs -type d "
+        "-exec touch '{}/__init__.py' ';'",
     )
     .add_local_dir(str(LOCAL_ROOT), str(PIPELINE_ROOT), copy=True)
     .env(
