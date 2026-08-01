@@ -3,7 +3,7 @@
 # Exact 124-repository MolmoAct2 BimanualYAM training split. The held-out
 # allenai/19012026-block-13 repository is intentionally absent.
 defaults:
-  - yam_relative
+  - dreamzero/yam_relative
   - _self_
 
 yam_data_root: /local/dreamzero_gear
