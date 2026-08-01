@@ -43,20 +43,22 @@ modal run src/modal_app.py::download_checkpoints
 modal run src/modal_app.py::smoke_test
 
 # Phase-3 hardware matrix. Defaults cover H100:8/H100:4/B200:8/H200:8,
-# dataloader workers 1/8, and container CPU counts 16/32.
+# dataloader workers 1/8, and container CPU counts 16/32. Each GPU/CPU
+# container reuses one NVMe copy of the same deterministic 10-repo subset.
 modal run src/modal_app.py::benchmark
 
 # Equal-wall-clock arms on the benchmark winner (example winner shown).
-modal run src/modal_app.py::tune --arm A --gpu-spec H100:4
-modal run src/modal_app.py::tune --arm B --gpu-spec H100:4
-modal run src/modal_app.py::tune --arm C --gpu-spec H100:4
+modal run src/modal_app.py::tune --arm A --gpu-spec H100:4 --per-device-batch-size 8
+modal run src/modal_app.py::tune --arm B --gpu-spec H100:4 --per-device-batch-size 8
+modal run src/modal_app.py::tune --arm C --gpu-spec H100:4 --per-device-batch-size 8
 
 # Main run consumes the selected GPU spec as a value, with no source edit.
 # Keep --exp-name equal to the winning arm so it resumes that prefix, including
 # optimizer/scheduler state; use tune-armB/C here if that arm won.
 # save_steps defaults to 0 = auto: the Young-Daly optimum sqrt(2*write*MTBF),
 # snapped to a divisor of the 2,500-step milestone interval.
-modal run --detach src/modal_app.py::train --gpu-spec H100:4 --exp-name tune-armA
+modal run --detach src/modal_app.py::train --gpu-spec H100:4 \
+  --per-device-batch-size 8 --exp-name tune-armA
 
 # Restarts are config-portable: train/tune assert global batch 32 and compare
 # the checkpoint's DeepSpeed shard count with the current world size. To

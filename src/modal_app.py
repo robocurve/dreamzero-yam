@@ -132,9 +132,11 @@ def _copy_repo_to_nvme(repo_id: str) -> Path:
     return target
 
 
-def _copy_training_data_to_nvme(include_val: bool = False) -> None:
+def _copy_training_data_to_nvme(
+    include_val: bool = False, repo_ids: list[str] | None = None
+) -> None:
     repos = _read_repos()
-    selected = list(repos["train"])
+    selected = list(repo_ids if repo_ids is not None else repos["train"])
     if include_val:
         selected.append(repos["val"])
     started = time.monotonic()
@@ -146,9 +148,17 @@ def _copy_training_data_to_nvme(include_val: bool = False) -> None:
     )
 
 
-def _install_data_config() -> None:
+def _install_data_config(repo_ids: list[str] | None = None) -> None:
     DATA_CONFIG_TARGET.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(DATA_CONFIG_SOURCE, DATA_CONFIG_TARGET)
+    if repo_ids is not None:
+        from omegaconf import OmegaConf
+
+        config = OmegaConf.load(DATA_CONFIG_TARGET)
+        config.train_dataset.mixture_spec[0].dataset_path.yam = [
+            str(LOCAL_DATA_ROOT / repo_id) for repo_id in repo_ids
+        ]
+        OmegaConf.save(config, DATA_CONFIG_TARGET)
 
 
 def young_daly_save_steps(
@@ -408,11 +418,10 @@ def _train_impl(
     fresh_token: str = "",
     allow_fresh_optimizer: bool = False,
     planned_timeout_seconds: float | None = None,
+    prepare_data: bool = True,
 ) -> dict[str, float | str | int]:
     _, num_gpus = parse_gpu_spec(gpu_spec)
-    if (stage == "train" or stage.startswith("tune")) and (
-        per_device_batch_size * num_gpus != GLOBAL_BATCH_SIZE
-    ):
+    if per_device_batch_size * num_gpus != GLOBAL_BATCH_SIZE:
         raise ValueError(
             f"stage {stage!r} must keep the global batch at {GLOBAL_BATCH_SIZE} "
             f"for config-portable restarts; got {per_device_batch_size} x "
@@ -477,8 +486,9 @@ def _train_impl(
                 flush=True,
             )
             checkpoint_volume.commit()
-    _install_data_config()
-    _copy_training_data_to_nvme(include_val=False)
+    if prepare_data:
+        _install_data_config()
+        _copy_training_data_to_nvme(include_val=False)
     command = _training_command(
         output=output,
         num_gpus=num_gpus,
@@ -684,6 +694,62 @@ def _gpu_stage_worker(
 
 
 @app.function(
+    image=training_image,
+    gpu="H100:1",
+    volumes={"/data": data_volume, "/checkpoints": checkpoint_volume},
+    secrets=secrets,
+    timeout=24 * 60 * 60,
+    cpu=32,
+    memory=262_144,
+    ephemeral_disk=1_200_000,
+)
+def _benchmark_worker(
+    gpu_spec: str,
+    container_cpus: int,
+    dataloader_workers: list[int],
+    steps: int,
+) -> list[dict[str, float | str | int]]:
+    architecture, num_gpus = parse_gpu_spec(gpu_spec)
+    if GLOBAL_BATCH_SIZE % num_gpus:
+        raise ValueError(
+            f"benchmark GPU count {num_gpus} must divide global batch "
+            f"{GLOBAL_BATCH_SIZE}"
+        )
+    per_device_batch_size = GLOBAL_BATCH_SIZE // num_gpus
+    # A fixed first-10 sorted train subset keeps every matrix cell comparable
+    # while limiting the one-time FUSE-to-NVMe copy in each GPU/CPU container.
+    benchmark_repos = sorted(_read_repos()["train"])[:10]
+    _install_data_config(benchmark_repos)
+    _copy_training_data_to_nvme(repo_ids=benchmark_repos)
+
+    rows = []
+    for workers in dataloader_workers:
+        stage = (
+            f"benchmark-{architecture.lower()}x{num_gpus}-w{workers}-c{container_cpus}"
+        )
+        row = _train_impl(
+            stage=stage,
+            gpu_spec=gpu_spec,
+            exp_name=stage,
+            max_steps=steps,
+            learning_rate=1e-5,
+            warmup_ratio=0.01,
+            per_device_batch_size=per_device_batch_size,
+            lora_rank=4,
+            lora_alpha=4,
+            save_steps=steps + 1,
+            dataloader_num_workers=workers,
+            fresh=True,
+            fresh_token=uuid.uuid4().hex,
+            prepare_data=False,
+        )
+        row["container_cpus"] = container_cpus
+        rows.append(row)
+        print(json.dumps(row, sort_keys=True), flush=True)
+    return rows
+
+
+@app.function(
     image=download_image,
     secrets=[modal.Secret.from_name("wandb")],
     timeout=60 * 60,
@@ -818,32 +884,22 @@ def benchmark(
     cpu_values = [int(item) for item in container_cpus.split(",")]
     rows: list[dict[str, float | str | int]] = []
     for gpu_spec in specs:
-        architecture, count = parse_gpu_spec(gpu_spec)
+        _, count = parse_gpu_spec(gpu_spec)
+        if GLOBAL_BATCH_SIZE % count:
+            raise ValueError(
+                f"benchmark GPU count {count} must divide global batch "
+                f"{GLOBAL_BATCH_SIZE}"
+            )
         for cpu_count in cpu_values:
-            for workers in worker_values:
-                stage = (
-                    f"benchmark-{architecture.lower()}x{count}-w{workers}-c{cpu_count}"
-                )
-                row = _gpu_stage_worker.with_options(
-                    gpu=gpu_spec, cpu=cpu_count
-                ).remote(
-                    stage=stage,
-                    gpu_spec=gpu_spec,
-                    exp_name=stage,
-                    max_steps=steps,
-                    learning_rate=1e-5,
-                    warmup_ratio=0.01,
-                    per_device_batch_size=4,
-                    lora_rank=4,
-                    lora_alpha=4,
-                    save_steps=steps + 1,
-                    dataloader_num_workers=workers,
-                    fresh=True,
-                    fresh_token=uuid.uuid4().hex,
-                )
-                row["container_cpus"] = cpu_count
-                rows.append(row)
-                print(json.dumps(row, sort_keys=True), flush=True)
+            container_rows = _benchmark_worker.with_options(
+                gpu=gpu_spec, cpu=cpu_count
+            ).remote(
+                gpu_spec=gpu_spec,
+                container_cpus=cpu_count,
+                dataloader_workers=worker_values,
+                steps=steps,
+            )
+            rows.extend(container_rows)
     print("GPU benchmark results:", flush=True)
     print(json.dumps(rows, indent=2), flush=True)
     _report_benchmark.remote(rows, steps)

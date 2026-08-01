@@ -24,7 +24,7 @@ The stable paths baked into checkpoint `config.json` are:
 ## Phase-3 launch and observability contract
 
 - Do not bake a production GPU allocation into a decorator. `benchmark`, `tune`, and `train` pass a validated `H100:<n>`, `H200:<n>`, or `B200:<n>` spec to the dynamic GPU worker. The selected benchmark winner is a CLI/config value.
-- The benchmark defaults to H100:8, H100:4, B200:8, and H200:8, and crosses those with dataloader-worker and container-CPU sweeps. It must read training data from container NVMe.
+- The benchmark defaults to H100:8, H100:4, B200:8, and H200:8, and crosses those with dataloader-worker and container-CPU sweeps. It must read a fixed 10-repo train subset from container NVMe, reuse that copy for the worker sweep, and keep global batch 32.
 - Arm files live in `configs/arms/`: A is lr 1e-5, r/α 4/4; B is lr 5e-6, r/α 4/4; C is lr 1e-5, r/α 32/32. Every arm and main train default uses warmup ratio 0.01. Arms get equal wall-clock limits.
 - All runs use the single WandB project `dreamzero-yam`. Required names carry `smoke`, `tune-armA/B/C`, `train`, `benchmark`, or `val-monitor`. Trainer loss must appear as `train/loss`.
 - Tune screening metrics are `instability/nan_flag`, `instability/loss_spike_ratio`, and `instability/grad_norm_ratio`.
