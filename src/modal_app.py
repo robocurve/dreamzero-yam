@@ -129,8 +129,14 @@ def _copy_repo_to_nvme(repo_id: str) -> Path:
     if not target.exists():
         # -L follows the hardlink/symlink sharing layer on the FUSE volume. The
         # resulting local tree has ordinary files and all random video reads hit
-        # container NVMe during torchrun.
-        subprocess.run(["cp", "-aL", str(source), str(target.parent)], check=True)
+        # container NVMe during torchrun. Copy to a temp name and rename so a
+        # mid-copy failure on a warm container can never be mistaken for a
+        # complete repo by the exists() skip above.
+        staging = target.parent / f".{target.name}.copying"
+        if staging.exists():
+            shutil.rmtree(staging)
+        subprocess.run(["cp", "-aL", str(source), str(staging)], check=True)
+        staging.rename(target)
     return target
 
 
