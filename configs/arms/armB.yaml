@@ -1,0 +1,8 @@
+{
+  "name": "armB",
+  "stage": "tune-armB",
+  "learning_rate": 5e-6,
+  "lora_rank": 4,
+  "lora_alpha": 4,
+  "warmup_ratio": 0.01
+}
