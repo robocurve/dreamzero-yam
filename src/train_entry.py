@@ -63,6 +63,12 @@ def _hash_value(value: Any, digest: Any, prefix: str = "root") -> None:
 
 
 def canonical_hash(value: Any) -> str:
+    """Order-independent hash of tensor and int/float/str/bool/None leaves.
+
+    Other leaf types (arbitrary objects, sets, numpy arrays) are deliberately
+    skipped — their reprs can embed memory addresses — so only tensor/scalar
+    content participates. Sufficient for torch/DeepSpeed optimizer state.
+    """
     digest = hashlib.sha256()
     _hash_value(value, digest)
     return digest.hexdigest()

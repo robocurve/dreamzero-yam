@@ -338,12 +338,16 @@ def assert_eval_reconstruction(final_checkpoint: Path, device: str = "cuda:0") -
         final_checkpoint, device=device
     )
     model.to(dtype=torch.bfloat16)
-    model.post_initialize()
     assert not base_integrity.missing_keys and not base_integrity.unexpected_keys
     assert not overlay_integrity.unexpected_keys
     assert (
         overlay_integrity.checkpoint_keys == overlay_integrity.trained_parameter_names
     )
+    # Parity must run BEFORE post_initialize: the reference was captured from
+    # the eager training module, and post_initialize torch.compiles the text/
+    # image/vae encoders on the parity path — inductor output is not
+    # guaranteed bit-identical to eager. val_monitor keeps post_initialize
+    # (upstream eval convention); its metrics don't require bit identity.
     assert_eval_reconstruction_parity(model, final_checkpoint)
 
 

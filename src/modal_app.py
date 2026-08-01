@@ -161,6 +161,12 @@ def _install_data_config(repo_ids: list[str] | None = None) -> None:
             str(LOCAL_DATA_ROOT / repo_id) for repo_id in repo_ids
         ]
         OmegaConf.save(config, DATA_CONFIG_TARGET)
+        # OmegaConf drops comments, including the `# @package _global_` Hydra
+        # directive on line 1 — without it the config lands under the group
+        # package and upstream conf.yaml's top-level train_dataset stays ???.
+        body = DATA_CONFIG_TARGET.read_text()
+        if not body.startswith("# @package _global_"):
+            DATA_CONFIG_TARGET.write_text("# @package _global_\n" + body)
 
 
 def young_daly_save_steps(
@@ -719,6 +725,8 @@ def _gpu_stage_worker(
     cpu=32,
     memory=262_144,
     ephemeral_disk=1_200_000,
+    # A preempted matrix cell restarts alone instead of aborting the sweep.
+    retries=modal.Retries(max_retries=2, initial_delay=60.0),
 )
 def _benchmark_worker(
     gpu_spec: str,
