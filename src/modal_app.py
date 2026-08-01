@@ -81,11 +81,20 @@ training_image = (
         "torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0",
         f"git clone https://github.com/dreamzero0/dreamzero.git {DREAMZERO_ROOT}",
         f"cd {DREAMZERO_ROOT} && git checkout {DREAMZERO_REF}",
-        f"python -m pip install -e {DREAMZERO_ROOT}",
+        # --no-deps: the full upstream tree drags in sim/teleop/serving deps
+        # (ray, mujoco, evdev — which fails to build — PyQt6, tensorrt, ...).
+        # Training-path deps are curated below from upstream pyproject +
+        # import scan of groot/vla (ftfy is the only borderline import).
+        f"python -m pip install --no-deps -e {DREAMZERO_ROOT}",
+        "python -m pip install "
+        "av==15.0.0 scipy==1.15.3 numpy==1.26.4 matplotlib hydra-core "
+        "loguru peft==0.5.0 datasets==3.6.0 pandas dm_tree "
+        "transformers==4.51.3 albumentations==1.4.18 einops==0.8.1 "
+        "imageio==2.34.2 imageio-ffmpeg wandb opencv-python-headless==4.9.0.80 "
+        "diffusers==0.30.2 ftfy huggingface_hub decord2 deepspeed "
+        "tiktoken sentencepiece termcolor click tyro timm safetensors "
+        "nvidia-ml-py pynvml",
         "MAX_JOBS=8 python -m pip install flash-attn --no-build-isolation",
-        # Reassert the versions the official pyproject and reviewed plan rely on.
-        "python -m pip install deepspeed peft==0.5.0 transformers==4.51.3 "
-        "decord2 nvidia-ml-py wandb",
     )
     .add_local_dir(str(LOCAL_ROOT), str(PIPELINE_ROOT), copy=True)
     .env(
