@@ -137,7 +137,7 @@ def _start_training(
         **os.environ,
         "DREAMZERO_SAVE_FIXED_SAMPLE": "1",
         "DREAMZERO_ASSERT_RESUME": "1" if assert_resume else "0",
-        "DREAMZERO_GLOBAL_BATCH": "8",
+        "DREAMZERO_GLOBAL_BATCH": "2",
         "DREAMZERO_STAGE": "smoke",
         "WANDB_PROJECT": "dreamzero-yam",
         "WANDB_NAME": "smoke",
