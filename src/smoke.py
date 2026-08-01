@@ -191,6 +191,7 @@ def _stop_process_group(
     process: subprocess.Popen, timeout: float = 180.0, hard: bool = False
 ) -> None:
     if process.poll() is not None:
+        _kill_stray_ranks()
         return
     os.killpg(process.pid, signal.SIGKILL if hard else signal.SIGTERM)
     try:
@@ -198,6 +199,22 @@ def _stop_process_group(
     except subprocess.TimeoutExpired:
         os.killpg(process.pid, signal.SIGKILL)
         process.wait()
+    _kill_stray_ranks()
+
+
+def _kill_stray_ranks() -> None:
+    """SIGKILL any surviving rank/worker processes by cmdline.
+
+    torchrun's rank children can sit in their own process groups; killpg on
+    the launcher's group then orphans them and their CUDA contexts held
+    ~94 GiB per GPU indefinitely (smoke 18). Sweep the whole tree by name.
+    """
+    for pattern in ("src/train_entry.py", "torchrun"):
+        subprocess.run(
+            ["pkill", "-9", "-f", pattern],
+            check=False,
+            capture_output=True,
+        )
 
 
 def _wait_for_gpu_reclaim(
