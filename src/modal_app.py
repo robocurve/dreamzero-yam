@@ -112,6 +112,7 @@ training_image = (
             "PYTHONPATH": f"{PIPELINE_ROOT}:{DREAMZERO_ROOT}",
             "PYTHONUNBUFFERED": "1",
             "TOKENIZERS_PARALLELISM": "false",
+            "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
         }
     )
 )
@@ -390,6 +391,7 @@ def _training_command(
     lora_alpha: int,
     save_steps: int,
     dataloader_num_workers: int,
+    grad_accum_steps: int = 1,
 ) -> list[str]:
     return [
         "torchrun",
@@ -415,7 +417,8 @@ def _training_command(
         f"training_args.warmup_ratio={warmup_ratio}",
         f"output_dir={output}",
         f"per_device_train_batch_size={per_device_batch_size}",
-        f"global_batch_size={per_device_batch_size * num_gpus}",
+        f"gradient_accumulation_steps={grad_accum_steps}",
+        f"global_batch_size={per_device_batch_size * num_gpus * grad_accum_steps}",
         f"max_steps={max_steps}",
         "weight_decay=1e-5",
         "save_total_limit=5",
@@ -466,19 +469,26 @@ def _train_impl(
     prepare_data: bool = True,
 ) -> dict[str, float | str | int]:
     _, num_gpus = parse_gpu_spec(gpu_spec)
-    if per_device_batch_size * num_gpus != GLOBAL_BATCH_SIZE:
+    # H100-80GB fits only 1-2 samples/GPU for this model (33 frames x 3 views;
+    # activation checkpointing is already on upstream), so the fixed global
+    # batch is reached via gradient accumulation, not per-device batch alone.
+    if GLOBAL_BATCH_SIZE % (per_device_batch_size * num_gpus) != 0:
         raise ValueError(
             f"stage {stage!r} must keep the global batch at {GLOBAL_BATCH_SIZE} "
             f"for config-portable restarts; got {per_device_batch_size} x "
-            f"{num_gpus} GPUs. Set per_device_batch_size to "
-            f"{GLOBAL_BATCH_SIZE} // num_gpus."
+            f"{num_gpus} GPUs, which does not divide {GLOBAL_BATCH_SIZE}."
         )
+    grad_accum_steps = GLOBAL_BATCH_SIZE // (per_device_batch_size * num_gpus)
+    print(
+        f"global batch {GLOBAL_BATCH_SIZE} = {per_device_batch_size} per-device "
+        f"x {num_gpus} GPUs x {grad_accum_steps} grad-accum",
+        flush=True,
+    )
     if save_steps <= 0:
+        # One optimizer step consumes the full global batch (accum included).
         save_steps = young_daly_save_steps(
             seconds_per_step=(
-                per_device_batch_size
-                * num_gpus
-                / ESTIMATED_AGGREGATE_SAMPLES_PER_SECOND
+                GLOBAL_BATCH_SIZE / ESTIMATED_AGGREGATE_SAMPLES_PER_SECOND
             )
         )
         print(f"Young-Daly derived save_steps={save_steps}", flush=True)
@@ -548,11 +558,14 @@ def _train_impl(
         lora_alpha=lora_alpha,
         save_steps=save_steps,
         dataloader_num_workers=dataloader_num_workers,
+        grad_accum_steps=grad_accum_steps,
     )
     runtime_metrics = output / "runtime_metrics.jsonl"
     process_env = {
         **os.environ,
-        "DREAMZERO_GLOBAL_BATCH": str(per_device_batch_size * num_gpus),
+        "DREAMZERO_GLOBAL_BATCH": str(
+            per_device_batch_size * num_gpus * grad_accum_steps
+        ),
         "DREAMZERO_STAGE": stage,
         "WANDB_PROJECT": WANDB_PROJECT,
         "WANDB_NAME": stage,
@@ -713,7 +726,7 @@ def _gpu_stage_worker(
     max_steps: int = 30_000,
     learning_rate: float = 1e-5,
     warmup_ratio: float = 0.01,
-    per_device_batch_size: int = 4,
+    per_device_batch_size: int = 2,
     lora_rank: int = 4,
     lora_alpha: int = 4,
     save_steps: int = 0,
@@ -766,7 +779,11 @@ def _benchmark_worker(
             f"benchmark GPU count {num_gpus} must divide global batch "
             f"{GLOBAL_BATCH_SIZE}"
         )
-    per_device_batch_size = GLOBAL_BATCH_SIZE // num_gpus
+    # Memory-safe per-device batch by architecture (smoke measured 76.5 GiB in
+    # use at batch 4 on H100-80GB -> OOM; B200's 192 GB can take the official
+    # batch 4). The global batch stays 32 via gradient accumulation.
+    max_per_device = {"H100": 2, "H200": 2, "B200": 4}.get(architecture, 2)
+    per_device_batch_size = min(GLOBAL_BATCH_SIZE // num_gpus, max_per_device)
     # A fixed first-10 sorted train subset keeps every matrix cell comparable
     # while limiting the one-time FUSE-to-NVMe copy in each GPU/CPU container.
     benchmark_repos = sorted(_read_repos()["train"])[:10]
@@ -860,7 +877,7 @@ def train(
     max_steps: int = 30_000,
     learning_rate: float = 1e-5,
     warmup_ratio: float = 0.01,
-    per_device_batch_size: int = 4,
+    per_device_batch_size: int = 2,
     lora_rank: int = 4,
     lora_alpha: int = 4,
     save_steps: int = 0,
@@ -895,7 +912,7 @@ def tune(
     container_cpus: int = 32,
     trial_minutes: int = 120,
     max_steps: int = 30_000,
-    per_device_batch_size: int = 4,
+    per_device_batch_size: int = 2,
     save_steps: int = 100,
     dataloader_num_workers: int = 8,
     fresh: bool = False,

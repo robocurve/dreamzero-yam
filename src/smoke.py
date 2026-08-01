@@ -98,7 +98,7 @@ def _training_command(dataset: Path, output: Path, num_gpus: int) -> list[str]:
         "training_args.deepspeed=groot/vla/configs/deepspeed/zero2.json",
         "training_args.warmup_ratio=0.01",
         f"output_dir={output}",
-        "per_device_train_batch_size=4",
+        "per_device_train_batch_size=1",
         f"max_steps={FINAL_STEP}",
         "weight_decay=1e-5",
         "save_total_limit=5",
