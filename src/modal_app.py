@@ -659,7 +659,7 @@ def smoke_test() -> None:
     volumes={"/data": data_volume, "/checkpoints": checkpoint_volume},
     secrets=secrets,
     timeout=24 * 60 * 60,
-    retries=modal.Retries(max_retries=3, initial_delay=60.0),
+    retries=modal.Retries(max_retries=8, initial_delay=60.0),
     cpu=32,
     memory=262_144,
     ephemeral_disk=1_200_000,

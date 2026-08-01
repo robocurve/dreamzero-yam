@@ -65,6 +65,8 @@ modal run --detach src/modal_app.py::train --gpu-spec H100:4 \
 # restart on a different GPU count, pass --allow-fresh-optimizer: the old
 # lineage is archived and the trained LoRA/head weights warm-start a fresh
 # optimizer at step 0.
+# Automatic retries and manual relaunches resume from the latest complete
+# checkpoint; the main worker allows eight retries across Modal's 24 h limit.
 
 # Run alongside training; it watches complete milestone copies (every saved
 # tune checkpoint, then every 2,500 steps in main training) and mirrors each
