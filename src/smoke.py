@@ -85,6 +85,11 @@ def _training_command(
         "--rdzv-backend=c10d",
         f"--rdzv-endpoint=localhost:{rdzv_port}",
         f"--nproc_per_node={num_gpus}",
+        # Per-rank logs on the volume AND merged into stdout, so a rank's
+        # traceback survives teardown spam and lost volume commits.
+        f"--log-dir={output}/torchrun-logs",
+        "--redirects=3",
+        "--tee=3",
         str(PIPELINE_ROOT / "src/train_entry.py"),
         "report_to=wandb",
         "data=dreamzero/yam_relative",
@@ -163,11 +168,16 @@ def _start_training(
     return process, log_file
 
 
-def _dump_log_tail(log_path: Path, lines: int = 150) -> None:
+def _dump_log_tail(log_path: Path, lines: int = 400) -> None:
     """Echo the child log to container stdout — volume commits can be lost on
     crash-shutdown, but streamed stdout always reaches Modal app logs."""
     try:
-        content = log_path.read_text(errors="replace").splitlines()[-lines:]
+        noise = ("frame #", "sendBytes", "ProcessGroupNCCL", "wandb:")
+        content = [
+            line
+            for line in log_path.read_text(errors="replace").splitlines()
+            if not any(marker in line for marker in noise)
+        ][-lines:]
     except OSError as error:
         print(f"[child log unreadable: {error}]", flush=True)
         return
