@@ -93,7 +93,7 @@ training_image = (
         "imageio==2.34.2 imageio-ffmpeg wandb opencv-python-headless==4.9.0.80 "
         "diffusers==0.30.2 ftfy huggingface_hub decord2 deepspeed "
         "tiktoken sentencepiece termcolor click tyro timm safetensors "
-        "nvidia-ml-py pynvml",
+        "nvidia-ml-py pynvml h5py gymnasium",
         "MAX_JOBS=8 python -m pip install flash-attn --no-build-isolation",
     )
     .add_local_dir(str(LOCAL_ROOT), str(PIPELINE_ROOT), copy=True)
