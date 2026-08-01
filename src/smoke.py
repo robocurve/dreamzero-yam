@@ -200,6 +200,40 @@ def _stop_process_group(
         process.wait()
 
 
+def _wait_for_gpu_reclaim(
+    threshold_bytes: int = 8 << 30, timeout: float = 300.0
+) -> None:
+    """Block until the driver reclaims the killed run's GPU memory.
+
+    SIGKILLed CUDA processes release memory asynchronously; relaunching
+    immediately left ~95 GiB of dead-context memory on the GPUs and the
+    resume OOM'd. Real preemption resumes start in fresh containers, so
+    this wait exists only for the same-container smoke drill.
+    """
+    import pynvml
+
+    pynvml.nvmlInit()
+    try:
+        count = pynvml.nvmlDeviceGetCount()
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            used = [
+                pynvml.nvmlDeviceGetMemoryInfo(
+                    pynvml.nvmlDeviceGetHandleByIndex(index)
+                ).used
+                for index in range(count)
+            ]
+            if all(value < threshold_bytes for value in used):
+                print(
+                    f"GPU memory reclaimed: {[u >> 30 for u in used]} GiB", flush=True
+                )
+                return
+            time.sleep(5)
+        raise TimeoutError(f"GPU memory not reclaimed within {timeout}s: {used}")
+    finally:
+        pynvml.nvmlShutdown()
+
+
 def kill_and_resume_drill(
     dataset: Path,
     output: Path,
@@ -247,6 +281,7 @@ def kill_and_resume_drill(
         except Exception:
             shutil.rmtree(checkpoint)
 
+    _wait_for_gpu_reclaim()
     resume_command = _training_command(dataset, output, num_gpus, rdzv_port=29517)
     resumed, resumed_log = _start_training(resume_command, log_path, assert_resume=True)
     try:
