@@ -54,10 +54,10 @@ def assert_complete_checkpoint(
         absent.append(
             f"DeepSpeed optimizer shards ({len(optimizer_files)}/{expected_world_size})"
         )
-    if len(model_state_files) < expected_world_size:
-        absent.append(
-            f"DeepSpeed model shards ({len(model_state_files)}/{expected_world_size})"
-        )
+    # ZeRO-2 writes ONE model_states file per model-parallel rank (mp_rank_00
+    # only, no MP here) — never one per data-parallel rank.
+    if not model_state_files:
+        absent.append("DeepSpeed model states (mp_rank_00_model_states.pt)")
     if require_resume_probes:
         for rank in range(expected_world_size):
             probe = checkpoint / f"resume_probe_rank_{rank}.json"

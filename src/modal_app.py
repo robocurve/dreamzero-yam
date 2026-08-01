@@ -258,16 +258,18 @@ def _checkpoint_complete(checkpoint: Path, expected_world_size: int | None) -> b
         model_state = [
             path for root in state_dirs for path in root.glob("*model_states.pt")
         ]
+        # DeepSpeed ZeRO-2 layout: optimizer states shard per data-parallel
+        # rank (bf16_zero_pp_rank_N_...), but model states are one file per
+        # MODEL-parallel rank — exactly one (mp_rank_00) without MP. Smoke 13
+        # proved a fully complete checkpoint has world_size optim shards and
+        # a single model_states file.
         if expected_world_size is None:
             # Self-consistency for resume discovery: a checkpoint written by a
             # different world size is still complete; the launcher decides
             # whether its DeepSpeed shards are loadable on this allocation.
-            if not optimizer or len(model_state) != len(optimizer):
+            if not optimizer or not model_state:
                 return False
-        elif (
-            len(optimizer) < expected_world_size
-            or len(model_state) < expected_world_size
-        ):
+        elif len(optimizer) < expected_world_size or not model_state:
             return False
         probe_world_size = expected_world_size or len(optimizer)
         if not all(
