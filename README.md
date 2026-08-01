@@ -66,9 +66,10 @@ modal run --detach src/modal_app.py::train --gpu-spec H100:4 \
 # lineage is archived and the trained LoRA/head weights warm-start a fresh
 # optimizer at step 0.
 
-# Run alongside training; it watches complete 2,500-step milestone copies and
-# mirrors each evaluated milestone to HF (robocurve/dreamzero-yam-molmoact2
-# under checkpoints/step-N/, via the hf-robocurve-write secret).
+# Run alongside training; it watches complete milestone copies (every saved
+# tune checkpoint, then every 2,500 steps in main training) and mirrors each
+# evaluated milestone to HF (robocurve/dreamzero-yam-molmoact2 under
+# checkpoints/step-N/, via the hf-robocurve-write secret).
 modal run --detach src/val_monitor.py::val_monitor --exp-name tune-armA
 ```
 
@@ -104,6 +105,6 @@ modal container list
 modal container exec <container-id> -- nvtop
 ```
 
-The main worker commits `dreamzero-yam-ckpt` about every 150 seconds, prunes incomplete checkpoints before resume, retains the five latest checkpoints, and preserves complete 2,500-step milestones.
+The main worker commits `dreamzero-yam-ckpt` about every 150 seconds, prunes incomplete checkpoints before resume, retains the five latest checkpoints, and preserves complete 2,500-step milestones. Tune stages preserve every complete checkpoint at their configured `save_steps` cadence so the val monitor can score short arms.
 
 The data volume is treated as read-only during GPU jobs. Checkpoint `config.json` files intentionally contain the stable `/checkpoints/...` component paths used by both training and reconstruction.

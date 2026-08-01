@@ -268,11 +268,13 @@ def _prune_incomplete_checkpoints(
         checkpoint_volume.commit()
 
 
-def _copy_milestones(output: Path, expected_world_size: int) -> None:
+def _copy_milestones(
+    output: Path, expected_world_size: int, interval_steps: int
+) -> None:
     milestone_root = output / "milestones"
     for checkpoint in _complete_checkpoints(output, expected_world_size):
         step = _checkpoint_step(checkpoint)
-        if step % MILESTONE_INTERVAL_STEPS:
+        if step % interval_steps:
             continue
         destination = milestone_root / checkpoint.name
         if destination.exists():
@@ -291,6 +293,7 @@ def _run_with_checkpoint_commits(
     output: Path,
     expected_world_size: int,
     process_env: dict[str, str],
+    milestone_interval_steps: int,
     planned_timeout_seconds: float | None = None,
 ) -> bool:
     """Run torchrun with 150-second volume commits and planned-stop support."""
@@ -305,7 +308,7 @@ def _run_with_checkpoint_commits(
     def commit_loop() -> None:
         while not stop.wait(COMMIT_INTERVAL_SECONDS):
             try:
-                _copy_milestones(output, expected_world_size)
+                _copy_milestones(output, expected_world_size, milestone_interval_steps)
                 checkpoint_volume.commit()
             except Exception as exc:
                 print(f"[checkpoint committer] {type(exc).__name__}: {exc}", flush=True)
@@ -329,7 +332,7 @@ def _run_with_checkpoint_commits(
     finally:
         stop.set()
         thread.join(timeout=10)
-        _copy_milestones(output, expected_world_size)
+        _copy_milestones(output, expected_world_size, milestone_interval_steps)
         checkpoint_volume.commit()
     return planned_stop
 
@@ -437,6 +440,9 @@ def _train_impl(
             )
         )
         print(f"Young-Daly derived save_steps={save_steps}", flush=True)
+    milestone_interval_steps = (
+        save_steps if stage.startswith("tune") else MILESTONE_INTERVAL_STEPS
+    )
     output = CHECKPOINT_ROOT / exp_name
     fresh_marker = output / ".fresh_launch_token"
     initialized_token = (
@@ -534,6 +540,7 @@ def _train_impl(
             output,
             expected_world_size=num_gpus,
             process_env=process_env,
+            milestone_interval_steps=milestone_interval_steps,
             planned_timeout_seconds=planned_timeout_seconds,
         )
     finally:
