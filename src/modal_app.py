@@ -604,7 +604,7 @@ def download_checkpoints() -> None:
 )
 def smoke_test() -> None:
     repos = _read_repos()
-    local_val = _copy_repo_to_nvme(repos["val"])
+    local_train = _copy_repo_to_nvme(sorted(repos["train"])[0])
     output = CHECKPOINT_ROOT / "smoke"
     output.mkdir(parents=True, exist_ok=True)
     process_env = {
@@ -633,7 +633,7 @@ def smoke_test() -> None:
                 sys.executable,
                 str(PIPELINE_ROOT / "src/smoke.py"),
                 "--dataset",
-                str(local_val),
+                str(local_train),
                 "--output",
                 str(output),
                 "--num-gpus",

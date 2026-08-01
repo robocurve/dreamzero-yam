@@ -16,7 +16,7 @@ from pathlib import Path
 
 DREAMZERO_ROOT = Path("/root/dreamzero")
 PIPELINE_ROOT = Path("/root/dreamzero_yam")
-DEFAULT_DATASET = Path("/local/dreamzero_gear/allenai/19012026-block-13")
+DEFAULT_DATASET = Path("/local/dreamzero_gear/allenai/01122025-box-01")
 DEFAULT_OUTPUT = Path("/checkpoints/yam/smoke")
 FIRST_CHECKPOINT_STEP = 20
 FINAL_STEP = 40
