@@ -110,8 +110,13 @@ training_image = (
     )
 )
 
-download_image = modal.Image.debian_slim(python_version="3.11").pip_install(
-    "huggingface_hub", "wandb"
+download_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install("huggingface_hub", "wandb", "safetensors")
+    # This module does `from src....` at import time, so every image that
+    # executes a function defined here needs the repo source + PYTHONPATH.
+    .add_local_dir(str(LOCAL_ROOT), str(PIPELINE_ROOT), copy=True)
+    .env({"PYTHONPATH": str(PIPELINE_ROOT), "PYTHONUNBUFFERED": "1"})
 )
 
 data_volume = modal.Volume.from_name("gr00t-yam-data", create_if_missing=False)
