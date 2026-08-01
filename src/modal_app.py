@@ -100,6 +100,12 @@ training_image = (
         f"find {DREAMZERO_ROOT}/groot/vla/configs -type d "
         "-exec touch '{}/__init__.py' ';'",
     )
+    .add_local_dir(str(LOCAL_ROOT / "patches"), "/root/patches", copy=True)
+    .run_commands(
+        # Upstream fixes required for per-device batch > 1 (see patches/ for
+        # rationale; the proven Ai2 run used batch 1 and never hit either).
+        f"cd {DREAMZERO_ROOT} && git apply --verbose /root/patches/*.patch",
+    )
     .add_local_dir(str(LOCAL_ROOT), str(PIPELINE_ROOT), copy=True)
     .env(
         {
