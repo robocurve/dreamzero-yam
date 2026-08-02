@@ -25,12 +25,7 @@ WANDB_PROJECT = "dreamzero-yam"
 HF_MILESTONE_REPO = "robocurve/dreamzero-yam-molmoact2"
 VAL_SEED = 20260706
 FIXED_SAMPLE_COUNT = 8
-ACTION_KEYS = (
-    "left_joint_pos",
-    "left_gripper_pos",
-    "right_joint_pos",
-    "right_gripper_pos",
-)
+EVAL_INDICES_PATH = PIPELINE_ROOT / "outputs/eval_indices.json"
 
 
 def checkpoint_step(path: Path) -> int:
@@ -186,104 +181,36 @@ def deterministic_flow_matching_loss(
     return sum(losses) / len(losses)
 
 
-def _decode_absolute_action(
-    transform: Any,
-    normalized_action: Any,
-    normalized_state: Any,
-) -> Any:
-    """Invert merged-stat normalization, then undo all-14D relative action."""
-    import numpy as np
-
-    decoded = transform.unapply(
-        {
-            "action": normalized_action.detach().float().cpu().clone(),
-            "state": normalized_state.detach().float().cpu().clone(),
-        }
-    )
-    action_parts = []
-    for key in ACTION_KEYS:
-        action_key = f"action.{key}"
-        state_key = f"state.{key}"
-        if action_key not in decoded or state_key not in decoded:
-            raise KeyError(f"inverse transform omitted {action_key!r} or {state_key!r}")
-        relative = np.asarray(decoded[action_key], dtype=np.float64)
-        state = np.asarray(decoded[state_key], dtype=np.float64)
-        reference = state[..., -1, :]
-        if relative.ndim > reference.ndim:
-            reference = np.expand_dims(reference, axis=-2)
-        action_parts.append(relative + reference)
-    absolute = np.concatenate(action_parts, axis=-1)
-    if absolute.shape[-1] != 14:
-        raise AssertionError(f"decoded YAM action is not 14-D: {absolute.shape}")
-    return absolute
-
-
-def teacher_forced_open_loop_mse(
-    model: Any, batches: list[Any], transform: Any
-) -> float:
-    """Run GT-video-conditioned action prediction and score raw absolute joints."""
-    import torch
-
-    from src.eval_spec import raw_absolute_mse
-
-    device = next(model.parameters()).device
-    errors = []
-    model.eval()
-    with (
-        torch.inference_mode(),
-        torch.autocast(
-            device_type=device.type, dtype=torch.bfloat16, enabled=device.type == "cuda"
-        ),
-    ):
-        for cpu_batch in batches:
-            batch = _to_device(cpu_batch, device)
-            # The head is stateful (language cache, current_start_frame, KV
-            # caches) and latent_video=None alone does NOT reset it; upstream
-            # only resets on language change / single-frame video / frame
-            # overflow. Force the `language is None` reset branch so every
-            # sample is evaluated stateless.
-            model.action_head.language = None
-            model.action_head.current_start_frame = 0
-            output = model.lazy_joint_video_action_causal(batch, latent_video=None)
-            prediction = output["action_pred"]
-            if "action" not in batch or "state" not in batch:
-                raise KeyError("held-out collated batch lacks action/state tensors")
-            prediction_absolute = _decode_absolute_action(
-                transform, prediction, batch["state"]
-            )
-            ground_truth_absolute = _decode_absolute_action(
-                transform, batch["action"], batch["state"]
-            )
-            errors.append(
-                raw_absolute_mse(prediction_absolute, ground_truth_absolute, horizon=16)
-            )
-    if not errors:
-        raise AssertionError("fixed held-out set produced no open-loop predictions")
-    return sum(errors) / len(errors)
-
-
 def evaluate_checkpoint(
-    checkpoint: Path, skip_open_loop_mse: bool = False
+    checkpoint: Path,
+    skip_open_loop_mse: bool = False,
+    indices_path: str | Path = EVAL_INDICES_PATH,
 ) -> dict[str, float]:
     """Load only through explicit AgiBot reconstruction and compute metrics.
 
-    skip_open_loop_mse: the lazy causal inference API consumes one 24-action
-    chunk per call; feeding it training-style 96-action batches trips an
-    upstream register-length assert. Until the chunked runner (mirroring
-    open_loop_yam.py's input construction) lands, arm comparison runs on the
-    deterministic val/loss alone.
+    ``skip_open_loop_mse`` keeps the deterministic-loss-only escape hatch until
+    the new one-frame/one-chunk causal runner has been validated on a GPU.
     """
     import torch
 
-    batches, transform = build_fixed_val_batches(checkpoint)
+    from src.eval_dreamzero import default_runner_output_path, run_open_loop_eval
+
+    batches, _ = build_fixed_val_batches(checkpoint)
     model, _, _ = reconstruct_model(checkpoint, device="cuda")
     model.to(dtype=torch.bfloat16)
     model.post_initialize()
     metrics = {"val/loss": deterministic_flow_matching_loss(model, batches)}
     if not skip_open_loop_mse:
-        metrics["val/open_loop_mse"] = teacher_forced_open_loop_mse(
-            model, batches, transform
+        dataset_root = LOCAL_VAL if LOCAL_VAL.exists() else DATA_VAL
+        open_loop = run_open_loop_eval(
+            model,
+            checkpoint,
+            dataset_root,
+            indices_path=indices_path,
+            output_path=default_runner_output_path(checkpoint),
         )
+        metrics["val/open_loop_mse"] = open_loop["open_loop_mse"]
+        metrics["val/open_loop_mse_24"] = open_loop["open_loop_mse_24"]
     del model
     torch.cuda.empty_cache()
     return metrics
@@ -348,6 +275,7 @@ def val_monitor(
     max_checkpoints: int = 0,
     upload_to_hf: bool = True,
     skip_open_loop_mse: bool = False,
+    indices_path: str = str(EVAL_INDICES_PATH),
 ) -> None:
     """Watch complete milestone copies, with durable heartbeat and duplicate guard."""
     import wandb
@@ -399,7 +327,9 @@ def val_monitor(
                 checkpoint_volume.commit()
                 started = time.monotonic()
                 metrics = evaluate_checkpoint(
-                    checkpoint, skip_open_loop_mse=skip_open_loop_mse
+                    checkpoint,
+                    skip_open_loop_mse=skip_open_loop_mse,
+                    indices_path=indices_path,
                 )
                 elapsed = time.monotonic() - started
                 with runtime_path.open("a") as handle:

@@ -23,10 +23,13 @@ DreamZero LoRA train ──► dreamzero-yam-ckpt:/yam/<experiment>/checkpoint-*
        │                      │
        │                      └──► milestones ──► 1-GPU val monitor
        └──► WandB train/loss                         │
-                                             val/loss + val/open_loop_mse
+                                val/loss + 16/24-step val/open_loop_mse
 ```
 
 `src/prepare_data.py` owns the CPU-only GEAR transform. `src/modal_app.py` owns checkpoint downloads, the 2×H100 smoke drill, hardware benchmark, tuning arms, and resumable train job. `src/val_monitor.py` watches milestones. `src/reconstruct.py` is the only supported LoRA reconstruction path. `src/eval_spec.py` defines the frozen cross-model sample and metric contract.
+`src/eval_dreamzero.py` implements the DreamZero side of that contract as one
+independent single-frame observation and one 24-action causal chunk per frozen
+index; it never routes checkpoint loading through `GrootSimPolicy`.
 
 ## Run stages
 
@@ -77,11 +80,18 @@ modal run --detach src/val_monitor.py::val_monitor --exp-name tune-armA
 
 Arm A is r/α 4/4 at 1e-5, Arm B changes only LR to 5e-6, and Arm C changes only capacity to r/α 32/32. The checked-in `configs/arms/*.json` files fix warmup ratio at 0.01 for all arms; main-train defaults match it for warm-start compatibility. Arm runs stop after the same `--trial-minutes` wall-clock budget.
 
-Generate the held-out indices later on a CPU container after the data exists, review them, and commit the produced JSON before evaluation:
+Generate the held-out indices on the evaluator's CPU-only Modal function after
+the data exists, review its JSON stdout, and commit it as
+`outputs/eval_indices.json` before evaluation:
 
 ```bash
-python -m src.eval_spec generate-indices \
-  --dataset /data/dreamzero_gear/allenai/19012026-block-13
+modal run src/eval_dreamzero.py::generate_eval_indices
+
+# One-checkpoint DreamZero evaluation; output defaults to
+# /checkpoints/yam/eval/<experiment>-step-<N>-dreamzero.json.
+modal run src/eval_dreamzero.py::eval_checkpoint \
+  --checkpoint /checkpoints/yam/<experiment>/milestones/checkpoint-N
+
 python -m src.eval_spec check-gt outputs/pi05.json outputs/gr00t.json outputs/dreamzero.json
 python -m src.eval_spec metric outputs/dreamzero.json
 ```
@@ -95,6 +105,7 @@ Use `modal app logs dreamzero-yam` for container, preemption, NVMe-copy, resume,
 - `train/loss`: Hugging Face Trainer's flow-matching training objective.
 - `val/loss`: the same objective on fixed held-out samples with fixed noise/timestep draws.
 - `val/open_loop_mse`: teacher-forced raw-absolute 14-D MSE over predicted steps 0–15.
+- `val/open_loop_mse_24`: the same teacher-forced raw-absolute MSE over all 24 predicted steps.
 - `instability/*`: NaN flag, loss/rolling-median spike ratio, normalized loss trend over the trailing 20% arm window (`rising_tail`), and grad-norm/rolling-median ratio.
 - `gpu/*`, `dcgm/source_tier`, and `perf/*`: per-GPU utilization, profiling tier, throughput, analytic model TFLOPs/s/GPU, MFU, cost per 1,000 samples, and dataloader wait (`perf/dataloader_wait_seconds_per_step`, `perf/dataloader_wait_fraction`).
 
