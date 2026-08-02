@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import glob
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -507,6 +508,11 @@ def eval_checkpoint(
     output_path: str = "",
 ) -> None:
     """Reconstruct one checkpoint and run the frozen open-loop evaluator."""
+    # Upstream torch.compiles the UniPC scheduler update with one_graph=True;
+    # per-sample scheduler instances recompile until FailOnRecompileLimitHit.
+    # Eager math is identical for evaluation, so disable dynamo entirely in
+    # this process (must precede the first torch import).
+    os.environ["TORCHDYNAMO_DISABLE"] = "1"
     import torch
 
     from src.reconstruct import reconstruct_model
