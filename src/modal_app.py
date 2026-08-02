@@ -165,6 +165,11 @@ def _copy_repo_to_nvme(repo_id: str) -> Path:
     return target
 
 
+def _copy_repo_to_nvme_by_id(repo_id: str) -> str:
+    _copy_repo_to_nvme(repo_id)
+    return repo_id
+
+
 def _copy_training_data_to_nvme(
     include_val: bool = False, repo_ids: list[str] | None = None
 ) -> None:
@@ -173,9 +178,16 @@ def _copy_training_data_to_nvme(
     if include_val:
         selected.append(repos["val"])
     started = time.monotonic()
-    for index, repo_id in enumerate(selected, 1):
-        print(f"NVMe copy [{index}/{len(selected)}] {repo_id}", flush=True)
-        _copy_repo_to_nvme(repo_id)
+    # FUSE volume reads dominate; 8 concurrent cp processes cut the ~2 h
+    # sequential copy of the full corpus several-fold (measured: arm A paid
+    # ~2.2 h of idle GPU time copying sequentially).
+    from concurrent.futures import ThreadPoolExecutor
+
+    completed = 0
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for repo_id in pool.map(_copy_repo_to_nvme_by_id, selected):
+            completed += 1
+            print(f"NVMe copy [{completed}/{len(selected)}] {repo_id}", flush=True)
     print(
         f"NVMe copy complete in {(time.monotonic() - started) / 60:.1f} min", flush=True
     )
