@@ -278,6 +278,9 @@ def val_monitor(
     indices_path: str = str(EVAL_INDICES_PATH),
 ) -> None:
     """Watch complete milestone copies, with durable heartbeat and duplicate guard."""
+    # Same dynamo disable as the standalone eval runner: per-sample UniPC
+    # scheduler instances otherwise recompile to FailOnRecompileLimitHit.
+    os.environ["TORCHDYNAMO_DISABLE"] = "1"
     import wandb
 
     _copy_val_to_nvme()
