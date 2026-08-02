@@ -435,11 +435,12 @@ def _training_command(
         "dataloader_pin_memory=false",
         f"dataloader_num_workers={dataloader_num_workers}",
         # Profiling (2026-08-01): stock 10k-step shards decode to 16-20 GiB
-        # per worker; 8 ranks thrashed the 256 GiB container into permanent
-        # memory reclaim (30.7 s/step vs 5 s forward). Quarter shards keep
-        # sampling semantics at ~5.5 GiB each; decord auto-threading otherwise
-        # grabs every core across ranks during cache bursts.
-        "+train_dataset.dataset_kwargs.num_steps_per_shard=2500",
+        # per rank; 8 ranks thrashed the 256 GiB container into permanent
+        # memory reclaim (30.7 s/step vs 5 s forward). Small shards trip a
+        # generate_shards cutoff assert on the full corpus (verified), so the
+        # fix is workers=1 + a 512 GiB container: the loader feeds a step in
+        # ~4.2 s, under the ~5 s forward, once RAM stops thrashing. Decord
+        # auto-threading otherwise grabs every core during cache bursts.
         "+train_dataset.dataset_kwargs.video_backend_kwargs.num_threads=4",
         "image_resolution_width=320",
         "image_resolution_height=176",
@@ -729,7 +730,7 @@ def smoke_test() -> None:
     timeout=24 * 60 * 60,
     retries=modal.Retries(max_retries=8, initial_delay=60.0),
     cpu=32,
-    memory=393_216,
+    memory=524_288,
     ephemeral_disk=1_200_000,
 )
 def _gpu_stage_worker(
@@ -743,7 +744,7 @@ def _gpu_stage_worker(
     lora_rank: int = 4,
     lora_alpha: int = 4,
     save_steps: int = 0,
-    dataloader_num_workers: int = 2,
+    dataloader_num_workers: int = 1,
     fresh: bool = False,
     fresh_token: str = "",
     allow_fresh_optimizer: bool = False,
@@ -775,7 +776,7 @@ def _gpu_stage_worker(
     secrets=secrets,
     timeout=24 * 60 * 60,
     cpu=32,
-    memory=393_216,
+    memory=524_288,
     ephemeral_disk=1_200_000,
     # A preempted matrix cell restarts alone instead of aborting the sweep.
     retries=modal.Retries(max_retries=2, initial_delay=60.0),
@@ -895,7 +896,7 @@ def train(
     lora_rank: int = 4,
     lora_alpha: int = 4,
     save_steps: int = 0,
-    dataloader_num_workers: int = 2,
+    dataloader_num_workers: int = 1,
     fresh: bool = False,
     allow_fresh_optimizer: bool = False,
 ) -> None:
@@ -928,7 +929,7 @@ def tune(
     max_steps: int = 30_000,
     per_device_batch_size: int = 2,
     save_steps: int = 100,
-    dataloader_num_workers: int = 2,
+    dataloader_num_workers: int = 1,
     fresh: bool = False,
     allow_fresh_optimizer: bool = False,
 ) -> None:
@@ -957,7 +958,7 @@ def tune(
 @app.local_entrypoint()
 def benchmark(
     gpu_specs: str = "H200:8,B200:8",
-    dataloader_workers: str = "2",
+    dataloader_workers: str = "1",
     container_cpus: str = "16,32",
     steps: int = 100,
 ) -> None:
