@@ -262,18 +262,28 @@ def teacher_forced_open_loop_mse(
     return sum(errors) / len(errors)
 
 
-def evaluate_checkpoint(checkpoint: Path) -> dict[str, float]:
-    """Load only through explicit AgiBot reconstruction and compute both metrics."""
+def evaluate_checkpoint(
+    checkpoint: Path, skip_open_loop_mse: bool = False
+) -> dict[str, float]:
+    """Load only through explicit AgiBot reconstruction and compute metrics.
+
+    skip_open_loop_mse: the lazy causal inference API consumes one 24-action
+    chunk per call; feeding it training-style 96-action batches trips an
+    upstream register-length assert. Until the chunked runner (mirroring
+    open_loop_yam.py's input construction) lands, arm comparison runs on the
+    deterministic val/loss alone.
+    """
     import torch
 
     batches, transform = build_fixed_val_batches(checkpoint)
     model, _, _ = reconstruct_model(checkpoint, device="cuda")
     model.to(dtype=torch.bfloat16)
     model.post_initialize()
-    metrics = {
-        "val/loss": deterministic_flow_matching_loss(model, batches),
-        "val/open_loop_mse": teacher_forced_open_loop_mse(model, batches, transform),
-    }
+    metrics = {"val/loss": deterministic_flow_matching_loss(model, batches)}
+    if not skip_open_loop_mse:
+        metrics["val/open_loop_mse"] = teacher_forced_open_loop_mse(
+            model, batches, transform
+        )
     del model
     torch.cuda.empty_cache()
     return metrics
@@ -337,6 +347,7 @@ def val_monitor(
     heartbeat_seconds: int = 60,
     max_checkpoints: int = 0,
     upload_to_hf: bool = True,
+    skip_open_loop_mse: bool = False,
 ) -> None:
     """Watch complete milestone copies, with durable heartbeat and duplicate guard."""
     import wandb
@@ -387,7 +398,9 @@ def val_monitor(
                 _write_monitor_state(state_path, state)
                 checkpoint_volume.commit()
                 started = time.monotonic()
-                metrics = evaluate_checkpoint(checkpoint)
+                metrics = evaluate_checkpoint(
+                    checkpoint, skip_open_loop_mse=skip_open_loop_mse
+                )
                 elapsed = time.monotonic() - started
                 with runtime_path.open("a") as handle:
                     handle.write(
