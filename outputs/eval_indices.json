@@ -1,0 +1,88 @@
+{
+  "indices": [
+    {
+      "episode": 10,
+      "frame": 4365
+    },
+    {
+      "episode": 6,
+      "frame": 5502
+    },
+    {
+      "episode": 6,
+      "frame": 4548
+    },
+    {
+      "episode": 7,
+      "frame": 728
+    },
+    {
+      "episode": 3,
+      "frame": 2492
+    },
+    {
+      "episode": 16,
+      "frame": 1116
+    },
+    {
+      "episode": 16,
+      "frame": 2816
+    },
+    {
+      "episode": 6,
+      "frame": 3928
+    },
+    {
+      "episode": 14,
+      "frame": 1369
+    },
+    {
+      "episode": 8,
+      "frame": 3225
+    },
+    {
+      "episode": 19,
+      "frame": 1606
+    },
+    {
+      "episode": 13,
+      "frame": 1716
+    },
+    {
+      "episode": 13,
+      "frame": 2211
+    },
+    {
+      "episode": 7,
+      "frame": 3437
+    },
+    {
+      "episode": 6,
+      "frame": 1447
+    },
+    {
+      "episode": 8,
+      "frame": 819
+    },
+    {
+      "episode": 13,
+      "frame": 1431
+    },
+    {
+      "episode": 2,
+      "frame": 4285
+    },
+    {
+      "episode": 4,
+      "frame": 7238
+    },
+    {
+      "episode": 3,
+      "frame": 232
+    }
+  ],
+  "minimum_remaining_frames": 24,
+  "num_samples": 20,
+  "repo_id": "allenai/19012026-block-13",
+  "seed": 0
+}
