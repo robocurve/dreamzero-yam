@@ -13,7 +13,6 @@ from typing import Any
 
 import modal
 
-from src.eval_spec import raw_absolute_mse
 from src.modal_app import checkpoint_volume, data_volume, secrets, training_image
 from src.reconstruct import reconstruct_model
 
@@ -224,6 +223,8 @@ def teacher_forced_open_loop_mse(
 ) -> float:
     """Run GT-video-conditioned action prediction and score raw absolute joints."""
     import torch
+
+    from src.eval_spec import raw_absolute_mse
 
     device = next(model.parameters()).device
     errors = []
