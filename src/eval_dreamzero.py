@@ -82,7 +82,9 @@ class _YAMDataset:
             glob.glob(str(root / "data/**/episode_*.parquet"), recursive=True)
         )
         if not parquet_paths:
-            raise FileNotFoundError(f"no episode parquet files found under {root / 'data'}")
+            raise FileNotFoundError(
+                f"no episode parquet files found under {root / 'data'}"
+            )
         self.parquet_paths = _index_episode_files(parquet_paths, "parquet")
         self._tables: dict[int, Any] = {}
 
@@ -122,7 +124,9 @@ class _YAMDataset:
 
     def _table(self, episode: int) -> Any:
         if episode not in self.parquet_paths:
-            raise KeyError(f"episode {episode} has no parquet file under {self.root / 'data'}")
+            raise KeyError(
+                f"episode {episode} has no parquet file under {self.root / 'data'}"
+            )
         if episode not in self._tables:
             import pyarrow.parquet as pq
 
@@ -138,9 +142,7 @@ class _YAMDataset:
         try:
             path = self.video_paths[video_key][episode]
         except KeyError as exc:
-            raise KeyError(
-                f"episode {episode} has no video for {video_key!r}"
-            ) from exc
+            raise KeyError(f"episode {episode} has no video for {video_key!r}") from exc
         capture = cv2.VideoCapture(str(path))
         try:
             capture.set(cv2.CAP_PROP_POS_FRAMES, frame)
@@ -178,7 +180,9 @@ class _YAMDataset:
         try:
             prompt = self.tasks[task_index]
         except KeyError as exc:
-            raise KeyError(f"task_index {task_index} is absent from tasks.jsonl") from exc
+            raise KeyError(
+                f"task_index {task_index} is absent from tasks.jsonl"
+            ) from exc
         if not isinstance(prompt, str) or not prompt.strip():
             raise AssertionError(
                 f"empty/non-string prompt at episode {episode} frame {frame}: {prompt!r}"
@@ -193,9 +197,7 @@ class _YAMDataset:
         obs["annotation.task"] = prompt
 
         ground_truth = np.asarray(
-            table.column("action")
-            .slice(frame, CHUNK_HORIZON)
-            .to_pylist(),
+            table.column("action").slice(frame, CHUNK_HORIZON).to_pylist(),
             dtype=np.float64,
         )
         if ground_truth.shape != (CHUNK_HORIZON, 14):
@@ -238,10 +240,14 @@ def _build_eval_transform(model: Any, checkpoint: Path) -> tuple[Any, Any]:
 
     train_cfg = OmegaConf.load(checkpoint / "experiment_cfg/conf.yaml")
     if "yam" not in train_cfg.transforms:
-        raise KeyError(f"checkpoint transforms have no 'yam': {train_cfg.transforms.keys()}")
+        raise KeyError(
+            f"checkpoint transforms have no 'yam': {train_cfg.transforms.keys()}"
+        )
     eval_transform = instantiate(train_cfg.transforms["yam"])
     if not isinstance(eval_transform, ComposedModalityTransform):
-        raise AssertionError(f"expected ComposedModalityTransform, got {eval_transform!r}")
+        raise AssertionError(
+            f"expected ComposedModalityTransform, got {eval_transform!r}"
+        )
     eval_transform.set_metadata(metadata)
 
     if train_cfg.get("relative_action_per_horizon", False):
@@ -379,7 +385,9 @@ def _decode_absolute_action(
         action_parts.append(part)
     absolute = np.concatenate(action_parts, axis=-1, dtype=np.float64)
     if absolute.shape != (CHUNK_HORIZON, 14):
-        raise AssertionError(f"decoded YAM action has unexpected shape {absolute.shape}")
+        raise AssertionError(
+            f"decoded YAM action has unexpected shape {absolute.shape}"
+        )
     return absolute
 
 
@@ -438,6 +446,7 @@ def run_open_loop_eval(
     train_cfg, eval_transform = _build_eval_transform(model, checkpoint)
     predictions = {}
     ground_truth = {}
+    prompts = {}
     mse_16 = []
     mse_24 = []
     model.eval()
@@ -447,7 +456,10 @@ def run_open_loop_eval(
         prediction = _predict_chunk(model, train_cfg, eval_transform, obs)
         index = (episode, frame)
         predictions[index] = prediction
-        ground_truth[index] = target
+        # Interchange GT is the shared 16-step window (the primary horizon);
+        # the 24-step target stays local for the auxiliary metric.
+        ground_truth[index] = target[:16]
+        prompts[index] = obs["annotation.task"]
         mse_16.append(raw_absolute_mse(prediction, target, horizon=16))
         mse_24.append(raw_absolute_mse(prediction, target, horizon=24))
         print(
@@ -464,6 +476,7 @@ def run_open_loop_eval(
         predictions=predictions,
         output_path=output_path,
         indices_path=indices_path,
+        prompts=prompts,
     )
     return {
         "open_loop_mse": sum(mse_16) / len(mse_16),
@@ -520,7 +533,9 @@ def eval_checkpoint(
     _copy_val_to_nvme()
     checkpoint_path = Path(checkpoint)
     destination = (
-        Path(output_path) if output_path else default_runner_output_path(checkpoint_path)
+        Path(output_path)
+        if output_path
+        else default_runner_output_path(checkpoint_path)
     )
     model, _, _ = reconstruct_model(checkpoint_path, device="cuda")
     # Keep reconstruct.py's injected LoRA modules in place. GrootSimPolicy's

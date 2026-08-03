@@ -128,6 +128,7 @@ def write_runner_output(
     output_path: str | Path,
     predictions: Mapping[tuple[int, int], np.ndarray | Sequence] | None = None,
     indices_path: str | Path = DEFAULT_INDICES_PATH,
+    prompts: Mapping[tuple[int, int], str] | None = None,
 ) -> None:
     """Emit the canonical GT/prediction interchange file for any model stack."""
     indices = load_indices(indices_path)
@@ -147,6 +148,8 @@ def write_runner_output(
         }
         if predictions is not None:
             row["prediction"] = np.asarray(predictions[(episode, frame)]).tolist()
+        if prompts is not None:
+            row["prompt"] = str(prompts[(episode, frame)])
         samples.append(row)
     payload = {
         "runner": runner,
@@ -170,6 +173,12 @@ def _load_runner(path: Path, indices: list[tuple[int, int]]) -> dict:
     ]
     if actual_indices != indices:
         raise AssertionError(f"{path}: frozen index order/identity differs")
+    for row in payload.get("samples", []):
+        shape = np.asarray(row["ground_truth"], dtype=np.float64).shape
+        if shape != (PRIMARY_HORIZON, 14):
+            raise AssertionError(
+                f"{path}: interchange GT must be ({PRIMARY_HORIZON}, 14), got {shape}"
+            )
     return payload
 
 
@@ -193,6 +202,18 @@ def assert_ground_truth_equal(
             zip(reference, runner["samples"], strict=True)
         ):
             actual = np.asarray(row["ground_truth"], dtype=np.float64)
+            expected_prompt = runners[0]["samples"][sample_index].get("prompt")
+            actual_prompt = row.get("prompt")
+            if (
+                expected_prompt is not None
+                and actual_prompt is not None
+                and expected_prompt != actual_prompt
+            ):
+                raise AssertionError(
+                    f"prompt mismatch {reference_name!r} vs {runner['runner']!r} "
+                    f"at sample {sample_index}: "
+                    f"{expected_prompt!r} != {actual_prompt!r}"
+                )
             if expected.shape != actual.shape or not np.array_equal(expected, actual):
                 max_delta = (
                     float(np.max(np.abs(expected - actual)))
