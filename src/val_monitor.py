@@ -315,6 +315,11 @@ def val_monitor(
     # Same dynamo disable as the standalone eval runner: per-sample UniPC
     # scheduler instances otherwise recompile to FailOnRecompileLimitHit.
     os.environ["TORCHDYNAMO_DISABLE"] = "1"
+    # HF/xet keeps an open log file in HF_HOME; if that lives on the volume,
+    # every checkpoint_volume.commit() fails with "open files preventing the
+    # operation". The monitor reads base checkpoints via direct volume paths,
+    # so a container-local cache costs nothing.
+    os.environ["HF_HOME"] = "/tmp/hf-cache"
     import wandb
 
     _copy_val_to_nvme()
