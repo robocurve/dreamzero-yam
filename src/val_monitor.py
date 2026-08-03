@@ -54,6 +54,39 @@ def checkpoint_is_evaluable(path: Path) -> bool:
         return False
 
 
+def harvest_interval_checkpoints(
+    exp_name: str, processed: set[int], interval: int
+) -> None:
+    """Copy every interval-th rotating checkpoint into milestones/.
+
+    The trainer saves every 100 steps with a 5-checkpoint rotation window
+    (500 steps of history), so a 500-step harvest cadence always finds its
+    target before rotation. Runs monitor-side so the training container
+    never needs a restart to densify the val curve.
+    """
+    if interval <= 0:
+        return
+    root = CHECKPOINT_ROOT / exp_name
+    milestones = root / "milestones"
+    milestones.mkdir(parents=True, exist_ok=True)
+    for path in sorted(root.glob("checkpoint-*"), key=checkpoint_step):
+        step = checkpoint_step(path)
+        if step % interval or step in processed:
+            continue
+        target = milestones / path.name
+        if target.exists():
+            continue
+        if not checkpoint_is_evaluable(path):
+            continue
+        staging = milestones / f".{path.name}.copying"
+        if staging.exists():
+            subprocess.run(["rm", "-rf", str(staging)], check=True)
+        subprocess.run(["cp", "-a", str(path), str(staging)], check=True)
+        staging.rename(target)
+        checkpoint_volume.commit()
+        print(f"harvested checkpoint-{step} into milestones/", flush=True)
+
+
 def discover_new_milestones(exp_name: str, processed: set[int]) -> list[Path]:
     root = CHECKPOINT_ROOT / exp_name / "milestones"
     candidates = [
@@ -276,6 +309,7 @@ def val_monitor(
     upload_to_hf: bool = True,
     skip_open_loop_mse: bool = False,
     indices_path: str = str(EVAL_INDICES_PATH),
+    harvest_interval: int = 0,
 ) -> None:
     """Watch complete milestone copies, with durable heartbeat and duplicate guard."""
     # Same dynamo disable as the standalone eval runner: per-sample UniPC
@@ -321,6 +355,7 @@ def val_monitor(
     try:
         while True:
             checkpoint_volume.reload()
+            harvest_interval_checkpoints(exp_name, processed, harvest_interval)
             pending = discover_new_milestones(exp_name, processed)
             for checkpoint in pending:
                 step = checkpoint_step(checkpoint)
