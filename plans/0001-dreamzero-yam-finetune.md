@@ -99,7 +99,20 @@ Costs use Modal on-demand list: H100 $3.95/GPU·h, B200 $6.25/GPU·h. Throughput
 5. **Secondary (honest):** autoregressive rollout MSE over ≥12 chunks (the community drift metric) — expect ~6× worse; report it anyway.
 6. **Qualitative:** dump imagined-video rollouts for 5–10 held-out episodes side-by-side with real footage. (These are also the marketing asset — the model *dreams* the YAM doing the task.)
 
-### Phase 6 — Publish (~$0)
+### Phase 6 — Publish
+
+**Model-card statistics wording (from the eval-stack review, 2026-08-02):**
+publish per-sample MSEs (or at least the std) from the interchange JSONs;
+frame the comparison as *paired* per-sample differences (all models score
+identical samples — the protocol's strength); claim no significance for
+small mean gaps at n=20 clustered samples (11 distinct episodes, one repo);
+say "GT step 0 is the action at the anchor frame"; the primary metric is
+the 16-step-chunk MSE under OUR frozen protocol — do not describe it as
+upstream's metric (upstream's open-loop script scores only the first
+predicted step). Note DreamZero is scored in cache-reset mode; deployment
+rollouts accrue KV-cache video context this metric doesn't credit (caveat
+inherited from upstream's own protocol).
+ (~$0)
 - HF `robocurve/dreamzero-yam-molmoact2`: **merged weights produced from the correct explicit reconstruction** (`merge_and_unload` on that model — publishing LoRA-only adapters alone would hand every downstream `GrootSimPolicy` user the wrong-base landmine) plus the raw LoRA adapters for provenance, `experiment_cfg` incl. merged `metadata.json`, model card with the three-model comparison table, training curves, AR-drift caveat, the wrong-base warning for anyone using stock `load_lora`, and imagined-video GIFs.
 - **The published artifact must be loadable by the STOCK path, which requires config rewrites** — merged weights alone aren't enough: ship `config.json` with `train_architecture: "full"` + `defer_lora_injection: false` and `experiment_cfg` with `save_lora_only: false` (otherwise stock `GrootSimPolicy` either routes to `load_lora` → vanilla-Wan base, or injects LoRA at init so plain merged keys mismatch `base_layer.*` model keys and `strict=False` swallows a near-random model). Include the full state dict (DiT+VAE+T5+image-encoder, mirroring the AgiBot ckpt layout); note `from_pretrained` ignores its `config` argument — only the shipped `config.json` matters.
 - **Publish gate:** load the published artifact through *stock* `GrootSimPolicy` and assert fixed-sample output identity against the explicit reconstruction before announcing.
