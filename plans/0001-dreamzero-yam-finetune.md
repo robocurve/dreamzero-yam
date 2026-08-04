@@ -188,3 +188,15 @@ robocurve/dreamzero-yam/
 1. **Budget: $5k soft target, $8k hard cap** (jeqcho, 2026-07-31 22:54: "ideally this should be lower tho, but just in case things happen overnight, i don't want u to be blocked"). Interpretation: plan and optimize as if the budget were $5k — trim/choose configs to land near the $3.4–4.5k central estimate; the $5k→$8k band exists solely so an overnight surprise (slow calibration, a preemption-heavy night, a justified >$500-savings restart) doesn't stall the pipeline waiting for approval. Crossing $5k projected spend requires a logged justification in the run log. Update 2026-08-02: additional emergency headroom exists beyond the cap (jeqcho), but it is not a target — size the main run by val-curve need (start ~12-15k steps, extend per milestone val MSE), never by available budget.
 2. **Repo name: `robocurve/dreamzero-yam`.**
 3. **Phase 7 (closed-loop): out of scope** (jeqcho, 2026-07-31). The project ends at Phase 6 (publish). Phase 7's section is retained below as reference only, in case results ever motivate reviving it as a separate project.
+
+## Run log — step-6000 halfway assessment (2026-08-04 10:55)
+
+Continue to 12,000. Last five val/loss points (4000–6000): 0.017616,
+0.017633, 0.017425, 0.017551, 0.017341 — negative fitted slope, new best
+at the newest point; no plateau. Second half ≈ $2.1k, projected total
+≈ $6.5k (crosses the $5k soft target; justification = curve still
+improving and model already at/below both re-scored baselines'
+open-loop MSE). Preemption at step ~5959 recovered automatically to
+checkpoint-5900 (56 steps lost, ~$18). Note: --save-steps 250 never
+took effect (still 100-step cadence — plumbing bug, left as-is since
+the dense cadence reduced the preemption loss).
