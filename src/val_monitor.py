@@ -387,9 +387,19 @@ def val_monitor(
                     )
                 run.log(metrics, step=step)
                 if upload_to_hf and step not in uploaded:
-                    _upload_milestone_to_hf(checkpoint, step)
-                    uploaded.add(step)
-                    state["uploaded_steps"] = sorted(uploaded)
+                    # A transient HF outage must not kill the monitor; a
+                    # failed mirror stays out of `uploaded` and retries on
+                    # the next cycle.
+                    try:
+                        _upload_milestone_to_hf(checkpoint, step)
+                        uploaded.add(step)
+                        state["uploaded_steps"] = sorted(uploaded)
+                    except Exception as error:
+                        print(
+                            f"HF mirror of step {step} failed "
+                            f"({type(error).__name__}: {error}); retrying later",
+                            flush=True,
+                        )
                 processed.add(step)
                 state["processed_steps"] = sorted(processed)
                 state["in_progress"] = None
