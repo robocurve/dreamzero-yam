@@ -122,6 +122,9 @@ def publish(
         "train_architecture: lora", "train_architecture: full"
     )
     conf_path.write_text(conf_text)
+    card = PIPELINE_ROOT / "MODEL_CARD.md"
+    if card.is_file():
+        shutil.copy2(card, artifact / "README.md")
     checkpoint_volume.commit()
     print(f"merged artifact written to {artifact}", flush=True)
 
