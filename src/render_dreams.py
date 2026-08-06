@@ -71,7 +71,6 @@ def _camera_grid(top, left, right):
     timeout=2 * 60 * 60,
     cpu=16,
     memory=131_072,
-    ephemeral_disk=400_000,
 )
 def render(
     checkpoint: str = DEFAULT_CHECKPOINT,
