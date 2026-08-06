@@ -6,7 +6,17 @@ Target: `robocurve/dreamzero-yam-molmoact2` on HF, with held-out open-loop MSE o
 
 **Plan:** [plans/0001-dreamzero-yam-finetune.md](plans/0001-dreamzero-yam-finetune.md) (6 critique rounds, approved 2026-07-31; budget cap $5k)
 
-Status: Phases 0–2 and the pulled-forward Phase-3 benchmark/monitoring scaffold are implemented. No Modal function or GPU job has been run from this repository yet.
+## Status: RELEASED (2026-08-06)
+
+**[robocurve/dreamzero-yam-molmoact2](https://huggingface.co/robocurve/dreamzero-yam-molmoact2)** — merged, stock-loadable, public. Under the frozen 20-sample protocol (raw absolute joints, first 16 steps, cross-model GT identity machine-verified):
+
+| Model | Mean MSE | Training samples |
+|---|---|---|
+| pi0.5 (full FT) | 0.002412 | 10.2M |
+| GR00T N1.7 (head-tune) | 0.002492 | ~5.1M |
+| **DreamZero (this repo)** | 0.002524 | **0.38M** |
+
+A statistical three-way tie (paired per-sample diffs ~0.1 sigma) at 13-27x fewer training samples. Full protocol, selection method, and caveats in [MODEL_CARD.md](MODEL_CARD.md); imagined-vs-real videos on the `dreamzero-yam-ckpt` volume under `/yam/renders/`. Registered in [WorldPolicies](https://github.com/robocurve/worldpolicies).
 
 ## Pipeline
 
