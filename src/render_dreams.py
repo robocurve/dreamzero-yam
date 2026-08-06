@@ -49,17 +49,19 @@ def _label(frame, text):
 
 
 def _camera_grid(top, left, right):
-    """Replicate the training-time 2x2 packing: top spans the upper half."""
+    """Replicate the model's exact 2x2 quadrant packing.
+
+    Matches the imagined output's layout (verified against a decoded dream):
+    (0,0) top camera, (0,1) right wrist, (1,0) left wrist, (1,1) black.
+    """
+    import cv2
     import numpy as np
 
     height, width = top.shape[:2]
-    canvas = np.zeros((height * 2, width, 3), dtype=top.dtype)
-    canvas[:height] = top
-    half = width // 2
-    import cv2
-
-    canvas[height:, :half] = cv2.resize(left, (half, height))
-    canvas[height:, half:] = cv2.resize(right, (width - half, height))
+    canvas = np.zeros((height * 2, width * 2, 3), dtype=top.dtype)
+    canvas[:height, :width] = top
+    canvas[:height, width:] = cv2.resize(right, (width, height))
+    canvas[height:, :width] = cv2.resize(left, (width, height))
     return canvas
 
 
