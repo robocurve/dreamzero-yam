@@ -91,9 +91,11 @@ the WandB project.
 - Data: LeRobot v3 → v2 conversion, H.264 re-encode, DreamZero GEAR
   metadata; relative 14-D joint actions (all dims), 33-frame / 3-camera /
   24-action chunks at 320×176.
-- The `checkpoints/step-N/` folders are raw LoRA training milestones
-  (research artifacts); the repository root is the merged, stock-loadable
-  release.
+- The repository root is the merged, stock-loadable release. All 26 raw
+  LoRA training milestones (weights-only) plus the final resumable training
+  state, run logs, and imagined-vs-real rollout videos live in the companion
+  repo
+  [dreamzero-yam-molmoact2-checkpoints](https://huggingface.co/robocurve/dreamzero-yam-molmoact2-checkpoints).
 
 ## Compute provenance
 
@@ -131,7 +133,7 @@ provider.
 
 The release is merged (no PEFT required) and loadable through DreamZero's
 standard `GrootSimPolicy` path. Note for anyone using the raw milestone
-checkpoints instead: upstream's `load_lora` reconstructs the frozen DiT from
+checkpoints (from the companion repo above) instead: upstream's `load_lora` reconstructs the frozen DiT from
 vanilla Wan2.1 rather than the AgiBot base these LoRAs were trained against —
 use an explicit AgiBot-base reconstruction (see `src/reconstruct.py` in the
 [training repo](https://github.com/robocurve/dreamzero-yam)).

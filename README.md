@@ -16,7 +16,11 @@ Target: `robocurve/dreamzero-yam-molmoact2` on HF, with held-out open-loop MSE o
 | GR00T N1.7 (head-tune) | 0.002492 | ~5.1M |
 | **DreamZero (this repo)** | 0.002524 | **0.38M** |
 
-A statistical three-way tie (paired per-sample diffs ~0.1 sigma) at 13-27x fewer training samples. Full protocol, selection method, and caveats in [MODEL_CARD.md](MODEL_CARD.md); imagined-vs-real videos on the `dreamzero-yam-ckpt` volume under `/yam/renders/`. Registered in [WorldPolicies](https://github.com/robocurve/worldpolicies).
+A statistical three-way tie (paired per-sample diffs ~0.1 sigma) at 13-27x fewer training samples. Full protocol, selection method, and caveats in [MODEL_CARD.md](MODEL_CARD.md). Registered in [WorldPolicies](https://github.com/robocurve/worldpolicies).
+
+**Training archive:** [robocurve/dreamzero-yam-molmoact2-checkpoints](https://huggingface.co/robocurve/dreamzero-yam-molmoact2-checkpoints) — all 26 milestone checkpoints (weights-only), the final resumable training state, run logs, and the imagined-vs-real rollout videos.
+
+**Upstream contributions:** the three bugs in `patches/` are filed against `dreamzero0/dreamzero` — [#86](https://github.com/dreamzero0/dreamzero/pull/86) (grad-disabled DiT block unpacking, fixes [#85](https://github.com/dreamzero0/dreamzero/issues/85)), [#87](https://github.com/dreamzero0/dreamzero/pull/87) (batch > 1 collate uniformity, fixes [#80](https://github.com/dreamzero0/dreamzero/issues/80)); the `has_real_action` broadcast fix was already open as [#45](https://github.com/dreamzero0/dreamzero/pull/45), independently confirmed there.
 
 ## Pipeline
 

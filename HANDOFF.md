@@ -47,9 +47,12 @@ modal run src/publish.py::publish                 # dry run + gate; --confirm up
 ```
 
 ### Environment notes
-- Modal volumes: `gr00t-yam-data` (shared converted dataset; DreamZero's GEAR
-  tree lives under `/dreamzero_gear`, never touch `/gr00t_v2` metadata),
-  `dreamzero-yam-ckpt` (checkpoints, milestones, renders, publish artifacts).
+- Modal volumes (decommissioned 2026-08-06 after the HF archive was
+  verified): `dreamzero-yam-ckpt` deleted; the `/dreamzero_gear` GEAR tree
+  removed from the shared `gr00t-yam-data` volume (`/gr00t_v2` untouched —
+  it belongs to the GR00T project). To retrain, re-run the download/convert
+  stages in `src/modal_app.py`; to resume, pull
+  `training-state/checkpoint-12000` from the archive repo.
 - The training image pins upstream commit `ab790c1` and applies `patches/` at
   build; deps are a curated `--no-deps` set (see `modal_app.py` comments).
 - H100-80GB cannot run this model at any working batch size; use H200/B200.
@@ -103,8 +106,20 @@ modal run src/publish.py::publish                 # dry run + gate; --confirm up
 
 ## Open items (none blocking)
 
-- [ ] Upstream contributions: the three `patches/` fixes are real bugs in
-  `dreamzero0/dreamzero` — file issues/PRs (needs maintainer-facing write-up).
+- [x] Upstream contributions filed (2026-08-06): PR
+  [#86](https://github.com/dreamzero0/dreamzero/pull/86) (grad-disabled block
+  unpacking, issue #85) and PR
+  [#87](https://github.com/dreamzero0/dreamzero/pull/87) (collate uniformity,
+  issue #80); the broadcast fix was already open as
+  [#45](https://github.com/dreamzero0/dreamzero/pull/45) and is independently
+  confirmed there. Watch for maintainer review feedback.
+- [x] Training artifacts archived (2026-08-06) to
+  [dreamzero-yam-molmoact2-checkpoints](https://huggingface.co/robocurve/dreamzero-yam-molmoact2-checkpoints)
+  (26 weights-only milestones + resumable checkpoint-12000 + logs + renders);
+  Modal volumes decommissioned after size-verified mirror. Intermediate
+  DeepSpeed optimizer states (~2.4 TB) were deliberately discarded — resume
+  from checkpoint-12000, or warm-start any milestone's weights via
+  `--allow-fresh-optimizer`.
 - [ ] NVML GPM profiling counters (tensor-active/DRAM-active) are unavailable
   inside Modal's gVisor; telemetry degrades to basic utilization.
 - [ ] `--save-steps` plumbing bug above.
