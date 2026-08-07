@@ -4,6 +4,8 @@ Implement against `plans/0001-dreamzero-yam-finetune.md`; the plan wins over ups
 
 ## Durable storage and tree ownership
 
+**PROJECT RELEASED AND DECOMMISSIONED (2026-08-06).** The `dreamzero-yam-ckpt` volume was deleted and `/data/dreamzero_gear` removed from `gr00t-yam-data` after a size-verified HF archive. Artifacts now live at HF `robocurve/dreamzero-yam-molmoact2` (merged release) and `robocurve/dreamzero-yam-molmoact2-checkpoints` (weights-only milestones, resumable checkpoint-12000, logs, renders). To work on this project again, re-run the download/convert stages first; the layout below describes what they rebuild.
+
 - Existing data volume: `gr00t-yam-data`, mounted at `/data`.
 - New checkpoint volume: `dreamzero-yam-ckpt`, mounted at `/checkpoints`.
 - GR00T-owned input: `/data/gr00t_v2/allenai/<repo>`. Never edit its metadata or payload.
@@ -33,7 +35,7 @@ The stable paths baked into checkpoint `config.json` are:
 - `nvtop` is installed in the training image. For inspection: `modal container list`, then `modal container exec <container-id> -- nvtop`.
 - `save_steps=0` (the train default) derives the cadence from the Young-Daly optimum `sqrt(2 * checkpoint-write-seconds * MTBF)`, snapped to a divisor of the 2,500-step main-run milestone interval so milestones always land on a saved checkpoint. Tune stages use `save_steps` itself as their milestone interval.
 - Restarts are config-portable: train/tune assert `per_device_batch_size * num_gpus == 32`, and the launcher compares the latest checkpoint's DeepSpeed shard count against the current world size. A mismatch is a hard error unless `--allow-fresh-optimizer` is passed, which archives the old lineage, warm-starts the trained overlay via `DREAMZERO_WARM_START_CHECKPOINT`, and resets the optimizer and step counter.
-- The val monitor mirrors every evaluated milestone to HF `robocurve/dreamzero-yam-molmoact2` under `checkpoints/step-N/` using the `hf-robocurve-write` secret's `HF_WRITE_TOKEN` (the read secret owns `HF_TOKEN`).
+- The val monitor mirrors every evaluated milestone to HF using the `hf-robocurve-write` secret's `HF_WRITE_TOKEN` (the read secret owns `HF_TOKEN`). Historical note: mirrors originally went to the release repo under `checkpoints/step-N/`; they now live weights-only in `robocurve/dreamzero-yam-molmoact2-checkpoints` (see `src/archive_upload.py`), and any future monitor run should target that archive repo.
 - The training process reports dataloader wait per step and as a wall-clock fraction (`perf/dataloader_wait_*`); read these before buying more GPU throughput.
 
 ## Data and checkpoint gotchas
