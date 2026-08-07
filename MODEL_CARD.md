@@ -114,6 +114,14 @@ H100 $3.95/GPU·h) and are accurate to roughly ±10%.
 | Storage (volumes, prorated) | — | — | ≈$40 |
 | **Total** | | **≈845 GPU-hours** | **≈$5,100–5,500 direct; ≈$6.5k project all-in incl. debug/restart overhead** |
 
+**Wall-clock:** the main fine-tune ran ~78 hours end-to-end on one 8×B200
+node (2026-08-02 15:15 → 2026-08-06 07:42 PDT), absorbing two spot
+preemptions and two 24-hour-boundary restarts via checkpoint resume; the
+validation sidecar ran concurrently for ~4 days on one H200. The full
+project — plan, pipeline build, 19 smoke iterations, benchmarks,
+hyperparameter trials, training, three-model evaluation, and release —
+spanned six calendar days (2026-07-31 → 2026-08-06).
+
 The step count, step time (22.9 s/step pure compute, ~10% MFU on B200), and
 stage durations are exact from logs; the cost split between stages is
 estimated. Training electricity/carbon figures are not available from the
