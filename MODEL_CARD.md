@@ -95,6 +95,30 @@ the WandB project.
   (research artifacts); the repository root is the merged, stock-loadable
   release.
 
+## Compute provenance
+
+All compute ran on [Modal](https://modal.com) (workspace `robocurve`),
+on-demand pricing, July 31 – August 6, 2026. Figures below are from run
+logs; costs use Modal list prices (B200 $6.25/GPU·h, H200 $4.54/GPU·h,
+H100 $3.95/GPU·h) and are accurate to roughly ±10%.
+
+| Stage | Hardware | GPU-hours | Est. cost |
+|---|---|---|---|
+| Main fine-tune (11,700 steps @ global batch 32) | 8×NVIDIA B200 | ≈625 | ≈$3,900 |
+| Hyperparameter arms (3 × ~2.5 h trials) | 8×B200 | ≈62 | ≈$390 |
+| Throughput benchmarks (H200:8 / B200:8 + aborted cells) | 8×H200 / 8×B200 | ≈35 | ≈$180 |
+| Smoke/integration drills (19 iterations) | 2×H200 | ≈25 | ≈$115 |
+| Validation sidecar (milestone evals, ~4 days) | 1×H200 | ≈85 | ≈$385 |
+| Baseline re-scores, eval validation, renders, publish | 1×B200 / 1×H200 | ≈12 | ≈$60 |
+| Data prep, profiling, downloads | CPU containers | — | ≈$50 |
+| Storage (volumes, prorated) | — | — | ≈$40 |
+| **Total** | | **≈845 GPU-hours** | **≈$5,100–5,500 direct; ≈$6.5k project all-in incl. debug/restart overhead** |
+
+The step count, step time (22.9 s/step pure compute, ~10% MFU on B200), and
+stage durations are exact from logs; the cost split between stages is
+estimated. Training electricity/carbon figures are not available from the
+provider.
+
 ## Loading
 
 The release is merged (no PEFT required) and loadable through DreamZero's
