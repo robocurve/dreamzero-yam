@@ -218,6 +218,49 @@ def upload_archive(confirm: bool = False) -> None:
 
 @app.function(
     image=training_image,
+    volumes={
+        "/checkpoints": checkpoint_volume,
+        "/pi05": modal.Volume.from_name("pi05-yam-ckpt"),
+        "/gr00t": modal.Volume.from_name("gr00t-yam-ckpt"),
+    },
+    secrets=[*secrets, modal.Secret.from_name("hf-robocurve-write")],
+    timeout=60 * 60,
+    cpu=4,
+    memory=16_384,
+)
+def upload_eval_jsons() -> None:
+    """Ship the frozen-protocol interchange JSONs the model card promises.
+
+    eval/ in the release repo gets all 24 DreamZero milestone runner files
+    plus the pi0.5 and GR00T baseline re-scores (20 samples each, same
+    frozen indices, machine-verified GT identity).
+    """
+    os.environ["HF_HOME"] = "/tmp/hf-cache"
+    from huggingface_hub import HfApi
+
+    api = HfApi(token=os.environ["HF_WRITE_TOKEN"])
+    uploads = [
+        (path, f"eval/{path.name}")
+        for path in sorted(Path("/checkpoints/yam/eval").glob("*.json"))
+    ]
+    uploads.append((Path("/pi05/eval_frozen/pi05.json"), "eval/pi05.json"))
+    uploads.append((Path("/gr00t/eval_frozen/gr00t.json"), "eval/gr00t.json"))
+    ops = []
+    from huggingface_hub import CommitOperationAdd
+
+    for src, dest in uploads:
+        ops.append(CommitOperationAdd(path_in_repo=dest, path_or_fileobj=str(src)))
+    api.create_commit(
+        repo_id=RELEASE_REPO,
+        repo_type="model",
+        operations=ops,
+        commit_message="Ship frozen-protocol per-sample interchange JSONs (eval/)",
+    )
+    print(f"uploaded {len(ops)} eval JSONs to {RELEASE_REPO}/eval", flush=True)
+
+
+@app.function(
+    image=training_image,
     secrets=[*secrets, modal.Secret.from_name("hf-robocurve-write")],
     timeout=60 * 60,
     cpu=4,
