@@ -218,6 +218,25 @@ def upload_archive(confirm: bool = False) -> None:
 
 @app.function(
     image=training_image,
+    secrets=[*secrets, modal.Secret.from_name("hf-robocurve-write")],
+    timeout=10 * 60,
+    cpu=2,
+    memory=8_192,
+)
+def add_to_collection() -> None:
+    """Add the release to the HF WorldPolicies collection."""
+    from huggingface_hub import HfApi
+
+    api = HfApi(token=os.environ["HF_WRITE_TOKEN"])
+    slug = "robocurve/worldpolicies-6a4dc8fd556a82aeea0fca37"
+    api.add_collection_item(
+        slug, item_id=RELEASE_REPO, item_type="model", exists_ok=True
+    )
+    print([item.item_id for item in api.get_collection(slug).items], flush=True)
+
+
+@app.function(
+    image=training_image,
     volumes={
         "/checkpoints": checkpoint_volume,
         "/pi05": modal.Volume.from_name("pi05-yam-ckpt"),
