@@ -135,3 +135,17 @@ modal container exec <container-id> -- nvtop
 The main worker commits `dreamzero-yam-ckpt` about every 150 seconds, prunes incomplete checkpoints before resume, retains the five latest checkpoints, and preserves complete 2,500-step milestones. Tune stages preserve every complete checkpoint at their configured `save_steps` cadence so the val monitor can score short arms.
 
 The data volume is treated as read-only during GPU jobs. Checkpoint `config.json` files intentionally contain the stable `/checkpoints/...` component paths used by both training and reconstruction.
+
+## Future image rebuild security
+
+This released project is decommissioned (see CLAUDE.md); these changes do not require
+restarting training or recreating deleted volumes. If it is reused, every Modal image
+now refreshes native CA certificates before pip and carries a shared certifi floor
+through `security-constraints.txt`. The local Modal tooling lock also includes the fix.
+The constraint applies to later pip installs; it does not update already built/cached
+images, non-pip trust stores, or upstream GPU dependencies.
+
+Before reuse, rebuild and verify each image/client with a healthy HTTPS control and
+both compromised-chain endpoints. This includes helper images. No image build,
+checkpoint download, training, or live resource check was performed for this change.
+CPU-only recipe checks: `python3 -m unittest discover -s tests -v`.

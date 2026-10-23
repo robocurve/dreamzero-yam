@@ -1,0 +1,2 @@
+# eMudhra root distrust: https://github.com/certifi/python-certifi/releases/tag/2026.10.19
+certifi>=2026.10.19
