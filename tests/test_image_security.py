@@ -28,15 +28,19 @@ class ImageSecurityTest(unittest.TestCase):
         image = RecordingImage()
         self.assertIs(security.secure_image(image), image)
         self.assertEqual([step[0] for step in image.steps],
-                         ["apt_install", "add_local_file", "env", "pip_install"])
+                         ["apt_install", "add_local_file", "add_local_file", "env",
+                          "run_commands", "env", "pip_install"])
         self.assertIn("ca-certificates", image.steps[0][1])
         local, remote = image.steps[1][1]
         self.assertEqual(Path(local).resolve(), security.SECURITY_CONSTRAINTS.resolve())
         self.assertTrue(image.steps[1][2]["copy"])
-        env = image.steps[2][1][0]
+        self.assertEqual(image.steps[2][1], (str(security.PIP_BOOTSTRAP), security.IMAGE_BOOTSTRAP))
+        env = image.steps[3][1][0]
         self.assertEqual(env["PIP_CONSTRAINT"], remote)
         self.assertEqual(env["PIP_CERT"], "/etc/ssl/certs/ca-certificates.crt")
-        self.assertEqual(image.steps[3][1], ("certifi>=2026.10.19",))
+        self.assertIn("configure_pip_trust python", image.steps[4][1][0])
+        self.assertEqual(image.steps[5][1][0]["PIP_USE_DEPRECATED"], "legacy-certs")
+        self.assertEqual(image.steps[6][1], ("certifi>=2026.10.19",))
 
     def test_every_existing_image_is_wrapped(self):
         images = []
@@ -61,12 +65,15 @@ class ImageSecurityTest(unittest.TestCase):
     def test_persistent_floor_and_local_lock(self):
         constraints = [line for line in security.SECURITY_CONSTRAINTS.read_text().splitlines()
                        if line and not line.startswith("#")]
-        self.assertEqual(constraints, ["certifi>=2026.10.19"])
+        self.assertEqual(constraints, ["certifi>=2026.10.19", "aiohttp>=3.14.4"])
         manifest = tomllib.loads((ROOT / "pyproject.toml").read_text())
         self.assertIn(constraints[0], manifest["project"]["dependencies"])
+        self.assertIn("aiohttp>=3.14.4", manifest["project"]["dependencies"])
         lock = tomllib.loads((ROOT / "uv.lock").read_text())
         certifi = next(package for package in lock["package"] if package["name"] == "certifi")
         self.assertGreaterEqual(tuple(map(int, certifi["version"].split("."))), (2026, 10, 19))
+        aiohttp = next(package for package in lock["package"] if package["name"] == "aiohttp")
+        self.assertGreaterEqual(tuple(map(int, aiohttp["version"].split("."))), (3, 14, 4))
 
 
 if __name__ == "__main__":

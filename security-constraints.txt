@@ -1,2 +1,5 @@
 # eMudhra root distrust: https://github.com/certifi/python-certifi/releases/tag/2026.10.19
 certifi>=2026.10.19
+
+# aiohttp runtime advisories GHSA-9xw5-w5jj-pvcg and related3.14.4 fixes.
+aiohttp>=3.14.4

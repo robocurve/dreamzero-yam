@@ -149,3 +149,11 @@ Before reuse, rebuild and verify each image/client with a healthy HTTPS control 
 both compromised-chain endpoints. This includes helper images. No image build,
 checkpoint download, training, or live resource check was performed for this change.
 CPU-only recipe checks: `python3 -m unittest discover -s tests -v`.
+
+The local Modal-tooling graph also requires aiohttp>=3.14.4 for the eight runtime
+advisories reported by Dependabot. The shared image constraint prevents future pip
+resolutions from selecting older aiohttp when an image dependency needs it; images
+that do not need aiohttp do not install it just for this floor. This does not repair
+already-built artifacts or prove whether any live resources remain after retirement.
+
+The image bootstrap pairs `PIP_CERT` with `PIP_USE_DEPRECATED=legacy-certs`: modern pip otherwise adds its vendored certifi roots to the system store. A version-aware, wheel-only pip26.2.2 bootstrap supports both older and newer base installers before setting that persistent flag; unknown versions or failed installs stop the build. Verify the pinned Modal base when rebuilding. See [pip certificate-store documentation](https://pip.pypa.io/en/stable/topics/https-certificates/).
