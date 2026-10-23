@@ -18,6 +18,7 @@ from pathlib import Path
 import modal
 
 from src.gpu_metrics import parse_gpu_spec, throughput_metrics
+from src.image_security import secure_image
 from src.reconstruct import (
     AGIBOT_CKPT_DIR,
     AGIBOT_REPO_ID,
@@ -62,7 +63,7 @@ WANDB_PROJECT = "dreamzero-yam"
 app = modal.App("dreamzero-yam")
 
 training_image = (
-    modal.Image.from_registry("nvidia/cuda:12.9.1-devel-ubuntu22.04", add_python="3.11")
+    secure_image(modal.Image.from_registry("nvidia/cuda:12.9.1-devel-ubuntu22.04", add_python="3.11"))
     .apt_install(
         "git",
         "git-lfs",
@@ -122,7 +123,7 @@ training_image = (
 )
 
 download_image = (
-    modal.Image.debian_slim(python_version="3.11")
+    secure_image(modal.Image.debian_slim(python_version="3.11"))
     .pip_install("huggingface_hub", "wandb", "safetensors")
     # This module does `from src....` at import time, so every image that
     # executes a function defined here needs the repo source + PYTHONPATH.

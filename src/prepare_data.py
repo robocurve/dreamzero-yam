@@ -19,6 +19,8 @@ from pathlib import Path
 
 import modal
 
+from src.image_security import secure_image
+
 DREAMZERO_REF = "ab790c198fbce33503358efbbd4187ce9a89adf3"
 APP_ROOT = Path("/root/dreamzero_yam")
 LOCAL_ROOT = Path(__file__).resolve().parents[1]
@@ -51,7 +53,7 @@ REQUIRED_SEED_METADATA = ("info.json", "tasks.jsonl", "episodes.jsonl")
 app = modal.App("dreamzero-yam-prepare")
 
 prepare_image = (
-    modal.Image.debian_slim(python_version="3.11")
+    secure_image(modal.Image.debian_slim(python_version="3.11"))
     .apt_install(
         "git", "git-lfs", "ffmpeg", "libgl1", "libglib2.0-0", "build-essential"
     )

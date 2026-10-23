@@ -135,3 +135,25 @@ modal container exec <container-id> -- nvtop
 The main worker commits `dreamzero-yam-ckpt` about every 150 seconds, prunes incomplete checkpoints before resume, retains the five latest checkpoints, and preserves complete 2,500-step milestones. Tune stages preserve every complete checkpoint at their configured `save_steps` cadence so the val monitor can score short arms.
 
 The data volume is treated as read-only during GPU jobs. Checkpoint `config.json` files intentionally contain the stable `/checkpoints/...` component paths used by both training and reconstruction.
+
+## Future image rebuild security
+
+This released project is decommissioned (see CLAUDE.md); these changes do not require
+restarting training or recreating deleted volumes. If it is reused, every Modal image
+now refreshes native CA certificates before pip and carries a shared certifi floor
+through `security-constraints.txt`. The local Modal tooling lock also includes the fix.
+The constraint applies to later pip installs; it does not update already built/cached
+images, non-pip trust stores, or upstream GPU dependencies.
+
+Before reuse, rebuild and verify each image/client with a healthy HTTPS control and
+both compromised-chain endpoints. This includes helper images. No image build,
+checkpoint download, training, or live resource check was performed for this change.
+CPU-only recipe checks: `python3 -m unittest discover -s tests -v`.
+
+The local Modal-tooling graph also requires aiohttp>=3.14.4 for the eight runtime
+advisories reported by Dependabot. The shared image constraint prevents future pip
+resolutions from selecting older aiohttp when an image dependency needs it; images
+that do not need aiohttp do not install it just for this floor. This does not repair
+already-built artifacts or prove whether any live resources remain after retirement.
+
+The image bootstrap pairs `PIP_CERT` with `PIP_USE_DEPRECATED=legacy-certs`: modern pip otherwise adds its vendored certifi roots to the system store. A version-aware, wheel-only pip26.2.2 bootstrap supports both older and newer base installers before setting that persistent flag; unknown versions or failed installs stop the build. Verify the pinned Modal base when rebuilding. See [pip certificate-store documentation](https://pip.pypa.io/en/stable/topics/https-certificates/).

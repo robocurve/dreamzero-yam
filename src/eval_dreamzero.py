@@ -13,6 +13,7 @@ from typing import Any
 
 import modal
 
+from src.image_security import secure_image
 from src.modal_app import checkpoint_volume, data_volume, secrets, training_image
 
 app = modal.App("dreamzero-yam-open-loop-eval")
@@ -44,7 +45,7 @@ ACTION_KEYS = (
 ACTION_DIMS = (6, 1, 6, 1)
 
 indices_image = (
-    modal.Image.debian_slim(python_version="3.11")
+    secure_image(modal.Image.debian_slim(python_version="3.11"))
     .pip_install("numpy>=1.26,<3")
     .add_local_dir(str(LOCAL_ROOT), str(PIPELINE_ROOT), copy=True)
     .env({"PYTHONPATH": str(PIPELINE_ROOT), "PYTHONUNBUFFERED": "1"})

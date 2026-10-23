@@ -15,6 +15,7 @@ from pathlib import Path
 
 import modal
 
+from src.image_security import secure_image
 from src.modal_app import checkpoint_volume, secrets
 
 app = modal.App("dreamzero-yam-loss-replay")
@@ -22,7 +23,7 @@ CHECKPOINT_ROOT = Path("/checkpoints/yam")
 WANDB_PROJECT = "dreamzero-yam"
 
 replay_image = (
-    modal.Image.debian_slim(python_version="3.11")
+    secure_image(modal.Image.debian_slim(python_version="3.11"))
     .pip_install("wandb")
     .add_local_dir(
         str(Path(__file__).resolve().parents[1]), "/root/dreamzero_yam", copy=True
